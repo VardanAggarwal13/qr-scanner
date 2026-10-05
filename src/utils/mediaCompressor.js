@@ -1,0 +1,164 @@
+import LZString from 'lz-string';
+import { getMediaFromVault, storeMediaInVault } from './mediaVault';
+
+/**
+ * Generates a public globally-accessible QR viewer URL
+ * NEVER puts large base64 data in the URL - only clean IDs or public HTTPS URLs
+ * @param {Object} mediaData
+ * @returns {string} Public clean URL
+ */
+export function packMediaToViewerURL(mediaData) {
+  const baseUrl = window.location.origin + window.location.pathname;
+  const docId = mediaData.id || `doc_${Date.now()}`;
+  
+  // Store the full media in local IndexedDB vault for instant local preview/offline usage
+  storeMediaInVault(mediaData);
+
+  const params = new URLSearchParams();
+  
+  // Only include 'url' if it is a real public HTTP/HTTPS URL (NOT a base64 data: string!)
+  const publicHttpUrl = (mediaData.cloudUrl && mediaData.cloudUrl.startsWith('http')) 
+    ? mediaData.cloudUrl 
+    : (mediaData.url && mediaData.url.startsWith('http')) 
+      ? mediaData.url 
+      : null;
+
+  if (publicHttpUrl) {
+    params.set('url', publicHttpUrl);
+  } else {
+    // If not a public URL yet, reference by clean local ID
+    params.set('id', docId);
+  }
+
+  if (mediaData.type) params.set('t', mediaData.type);
+  if (mediaData.title && mediaData.title.length < 50) params.set('title', mediaData.title);
+  if (mediaData.author && mediaData.author.length < 30) params.set('author', mediaData.author);
+  if (mediaData.pin) params.set('pin', mediaData.pin);
+
+  return `${baseUrl}#/view?${params.toString()}`;
+}
+
+/**
+ * Unpacks a document or media object from URL hash / query parameters
+ * Reads direct public cloud URL or checks local IndexedDB by ID
+ * @param {string} hashOrQuery
+ * @returns {Promise<Object|null>}
+ */
+export async function unpackMediaFromURL(hashOrQuery) {
+  try {
+    const rawHash = hashOrQuery.replace(/^#\/?/, '').replace(/^\?/, '');
+    const searchPart = rawHash.includes('?') ? rawHash.split('?')[1] : rawHash;
+    const params = new URLSearchParams(searchPart);
+
+    const publicUrl = params.get('url');
+    const docId = params.get('id');
+    const type = params.get('t') || inferTypeFromUrl(publicUrl);
+    const title = params.get('title') || 'Attached Document';
+    const description = params.get('desc') || '';
+    const author = params.get('author') || '';
+    const fileName = params.get('fn') || '';
+    const pin = params.get('pin') || '';
+
+    // 1. If public cloud URL is present, this works globally on any phone!
+    if (publicUrl && publicUrl.startsWith('http')) {
+      return {
+        id: docId || `doc_${Date.now()}`,
+        type: type || 'pdf',
+        title,
+        description,
+        author,
+        fileName,
+        dataUrl: publicUrl,
+        url: publicUrl,
+        cloudUrl: publicUrl,
+        pin,
+        timestamp: Date.now()
+      };
+    }
+
+    // 2. If docId is present, load from local IndexedDB Vault
+    if (docId) {
+      const fromVault = await getMediaFromVault(docId);
+      if (fromVault) return fromVault;
+    }
+
+    // 3. Fallback: Check compressed v token if present
+    const token = params.get('v');
+    if (token) {
+      const decompressed = LZString.decompressFromEncodedURIComponent(token);
+      if (decompressed) {
+        const raw = JSON.parse(decompressed);
+        return {
+          id: raw.id,
+          type: raw.t,
+          title: raw.n,
+          description: raw.d,
+          fileName: raw.fn,
+          mimeType: raw.mt,
+          dataUrl: raw.u,
+          url: raw.u,
+          author: raw.a,
+          timestamp: raw.ts,
+          pin: raw.p
+        };
+      }
+    }
+
+    return null;
+  } catch (err) {
+    console.error('Error unpacking media from URL:', err);
+    return null;
+  }
+}
+
+function inferTypeFromUrl(url) {
+  if (!url) return 'pdf';
+  const clean = url.toLowerCase();
+  if (clean.endsWith('.pdf')) return 'pdf';
+  if (clean.match(/\.(jpg|jpeg|png|webp|gif|svg)$/)) return 'image';
+  if (clean.match(/\.(mp4|webm|mov|mkv)$/)) return 'video';
+  if (clean.match(/\.(mp3|wav|ogg|m4a)$/)) return 'audio';
+  return 'pdf';
+}
+
+/**
+ * Converts a File object to Data URL (Base64)
+ */
+export function fileToDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Compresses an image file before converting to Data URL if needed
+ */
+export async function compressImageFile(file, maxWidth = 1200, quality = 0.8) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width;
+        let h = img.height;
+
+        if (w > maxWidth) {
+          h = Math.round((h * maxWidth) / w);
+          w = maxWidth;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
