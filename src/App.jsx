@@ -11,16 +11,16 @@ import { unpackMediaFromURL } from './utils/mediaCompressor';
 import { addScanToHistory } from './utils/storage';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('create'); // 'create' | 'camera' | 'media' | 'history'
+  const [activeTab, setActiveTab] = useState('create');
   const [theme, setTheme] = useState('dark');
   const [activeScanResult, setActiveScanResult] = useState(null);
   const [activeDocumentView, setActiveDocumentView] = useState(null);
 
-  // Check URL hash for shared document viewer payloads (#/view?id=... or #/view?v=...)
+  // Check URL hash / parameters for shared document payloads (#/view?url=... or ?id=...)
   useEffect(() => {
     const handleHashChange = async () => {
-      const hash = window.location.hash || '';
-      if (hash.includes('/view') || hash.includes('id=') || hash.includes('v=')) {
+      const hash = window.location.hash || window.location.search || '';
+      if (hash.includes('/view') || hash.includes('url=') || hash.includes('id=') || hash.includes('v=')) {
         try {
           const media = await unpackMediaFromURL(hash);
           if (media) {
@@ -52,22 +52,15 @@ export default function App() {
     setActiveScanResult(scanData);
   };
 
-  // If a document viewer URL is loaded directly (Receiver screen mode)
+  // =========================================================================
+  // 📱 DIRECT RECEIVER MODE (When anyone scans the QR code from their phone)
+  // Completely hides creator dashboard/tabs so receiver ONLY sees the document!
+  // =========================================================================
   if (activeDocumentView) {
     return (
       <ErrorBoundary>
-        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-          <Navbar 
-            activeTab={activeTab} 
-            setActiveTab={(tab) => {
-              setActiveDocumentView(null);
-              window.location.hash = '';
-              setActiveTab(tab);
-            }} 
-            theme={theme} 
-            toggleTheme={toggleTheme} 
-          />
-          <main style={{ flex: 1 }}>
+        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
+          <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             <DocumentViewer 
               mediaData={activeDocumentView} 
               onBack={() => {
@@ -81,6 +74,9 @@ export default function App() {
     );
   }
 
+  // =========================================================================
+  // 🛠️ CREATOR & SCANNER DASHBOARD (When opening the root home website)
+  // =========================================================================
   return (
     <ErrorBoundary>
       <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>

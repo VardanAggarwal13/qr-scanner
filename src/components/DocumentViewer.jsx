@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   FileText, Image as ImageIcon, Video, Music, Link as LinkIcon, 
   Download, Share2, Printer, ArrowLeft, ZoomIn, ZoomOut, RotateCw, 
-  ChevronLeft, ChevronRight, Eye, Shield, Lock, CheckCircle2, Copy, ExternalLink
+  ChevronLeft, ChevronRight, Eye, Shield, Lock, CheckCircle2, Copy, ExternalLink, QrCode
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -36,7 +36,7 @@ export default function DocumentViewer({ mediaData, onBack }) {
     }
   };
 
-  const pdfUrl = mediaData?.dataUrl || mediaData?.url || mediaData?.cloudUrl;
+  const pdfUrl = mediaData?.cloudUrl || mediaData?.url || mediaData?.dataUrl;
 
   // Load PDF if type is PDF
   useEffect(() => {
@@ -104,7 +104,7 @@ export default function DocumentViewer({ mediaData, onBack }) {
   }, [pdfDoc, currentPage, pdfScale]);
 
   const handleDownload = () => {
-    const fileSource = mediaData?.dataUrl || mediaData?.url || mediaData?.cloudUrl;
+    const fileSource = mediaData?.cloudUrl || mediaData?.url || mediaData?.dataUrl;
     if (!fileSource) return;
     const link = document.createElement('a');
     link.href = fileSource;
@@ -154,7 +154,7 @@ export default function DocumentViewer({ mediaData, onBack }) {
   // Password Lock Screen
   if (!isUnlocked) {
     return (
-      <div style={{ maxWidth: '440px', margin: '60px auto', padding: '0 16px' }}>
+      <div style={{ maxWidth: '420px', margin: '80px auto', padding: '0 16px' }}>
         <div className="glass-panel" style={{ padding: '36px 28px', textAlign: 'center' }}>
           <div style={{
             width: '64px',
@@ -204,12 +204,6 @@ export default function DocumentViewer({ mediaData, onBack }) {
             <button type="submit" className="btn-primary" style={{ width: '100%', marginBottom: '12px' }}>
               <Shield size={18} /> Unlock Document
             </button>
-
-            {onBack && (
-              <button type="button" className="btn-ghost" onClick={onBack} style={{ width: '100%' }}>
-                <ArrowLeft size={16} /> Go Back
-              </button>
-            )}
           </form>
         </div>
       </div>
@@ -218,137 +212,142 @@ export default function DocumentViewer({ mediaData, onBack }) {
 
   const getTypeIcon = () => {
     switch (mediaData.type) {
-      case 'pdf': return <FileText size={24} color="#ef4444" />;
-      case 'image': return <ImageIcon size={24} color="#10b981" />;
-      case 'video': return <Video size={24} color="#3b82f6" />;
-      case 'audio': return <Music size={24} color="#a855f7" />;
-      default: return <LinkIcon size={24} color="#06b6d4" />;
+      case 'pdf': return <FileText size={22} color="#ef4444" />;
+      case 'image': return <ImageIcon size={22} color="#10b981" />;
+      case 'video': return <Video size={22} color="#3b82f6" />;
+      case 'audio': return <Music size={22} color="#a855f7" />;
+      default: return <LinkIcon size={22} color="#06b6d4" />;
     }
   };
 
   return (
-    <div style={{ maxWidth: '1050px', margin: '0 auto', padding: '20px 16px 80px 16px' }}>
+    <div style={{ maxWidth: '1100px', width: '100%', margin: '0 auto', padding: '16px 16px 60px 16px' }}>
       
-      {/* Top Header Card */}
-      <div className="glass-panel" style={{ padding: '24px', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, minWidth: '260px' }}>
-            <div style={{
-              width: '50px',
-              height: '50px',
-              borderRadius: 'var(--radius-md)',
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid var(--border-glass)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0
-            }}>
-              {getTypeIcon()}
-            </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                <span className="badge badge-primary">{mediaData.type?.toUpperCase()}</span>
-                {mediaData.pin && <span className="badge badge-warning"><Lock size={10} /> Protected</span>}
-              </div>
-              <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                {mediaData.title || 'Attached Document'}
-              </h1>
-              {mediaData.author && (
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                  By {mediaData.author}
-                </p>
-              )}
-            </div>
+      {/* Sleek Minimal Header Bar for Receiver */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '14px 20px',
+        background: 'var(--bg-glass)',
+        backdropFilter: 'blur(16px)',
+        borderRadius: 'var(--radius-lg)',
+        border: '1px solid var(--border-glass)',
+        marginBottom: '18px',
+        flexWrap: 'wrap',
+        gap: '12px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '42px',
+            height: '42px',
+            borderRadius: '10px',
+            background: 'rgba(255, 255, 255, 0.06)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            {getTypeIcon()}
           </div>
-
-          {/* Action Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            <button className="btn-secondary" onClick={handleShare} title="Share link">
-              {copied ? <CheckCircle2 size={18} color="var(--success)" /> : <Share2 size={18} />}
-              <span>{copied ? 'Copied Link!' : 'Share'}</span>
-            </button>
-            <button className="btn-secondary" onClick={handlePrint} title="Print Document">
-              <Printer size={18} />
-              <span>Print</span>
-            </button>
-            <button className="btn-primary" onClick={handleDownload} title="Download File">
-              <Download size={18} />
-              <span>Download</span>
-            </button>
+          <div>
+            <h1 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+              {mediaData.title || 'Attached Document'}
+            </h1>
+            {mediaData.author && (
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                By {mediaData.author}
+              </p>
+            )}
           </div>
         </div>
 
-        {mediaData.description && (
-          <div style={{
-            marginTop: '16px',
-            paddingTop: '16px',
-            borderTop: '1px solid var(--border-glass)',
-            color: 'var(--text-secondary)',
-            fontSize: '0.95rem',
-            lineHeight: 1.6
-          }}>
-            {mediaData.description}
-          </div>
-        )}
+        {/* 1-Click Action Buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button className="btn-secondary" onClick={handleShare} style={{ padding: '8px 12px' }} title="Share Link">
+            {copied ? <CheckCircle2 size={16} color="var(--success)" /> : <Share2 size={16} />}
+            <span style={{ fontSize: '0.85rem' }}>{copied ? 'Copied' : 'Share'}</span>
+          </button>
+          
+          <button className="btn-secondary" onClick={handlePrint} style={{ padding: '8px 12px' }} title="Print">
+            <Printer size={16} />
+            <span style={{ fontSize: '0.85rem' }}>Print</span>
+          </button>
+
+          <button className="btn-primary" onClick={handleDownload} style={{ padding: '8px 16px' }} title="Download Original">
+            <Download size={16} />
+            <span style={{ fontSize: '0.85rem' }}>Download</span>
+          </button>
+        </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="glass-panel" style={{ padding: '20px', minHeight: '450px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      {mediaData.description && (
+        <div style={{
+          padding: '12px 18px',
+          background: 'var(--bg-card)',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border-glass)',
+          marginBottom: '16px',
+          color: 'var(--text-secondary)',
+          fontSize: '0.9rem',
+          lineHeight: 1.5
+        }}>
+          {mediaData.description}
+        </div>
+      )}
+
+      {/* Main Content Presentation */}
+      <div className="glass-panel" style={{ padding: '16px', minHeight: '500px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         
         {/* --- 1. PDF VIEWER --- */}
         {mediaData.type === 'pdf' && (
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             
-            {/* PDF Toolbar */}
+            {/* Toolbar */}
             <div style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               width: '100%',
-              maxWidth: '850px',
-              padding: '10px 16px',
+              maxWidth: '900px',
+              padding: '8px 16px',
               background: 'var(--bg-secondary)',
               borderRadius: 'var(--radius-md)',
               border: '1px solid var(--border-glass)',
-              marginBottom: '16px',
+              marginBottom: '14px',
               flexWrap: 'wrap',
               gap: '10px'
             }}>
-              {/* Pagination */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <button 
                   className="btn-ghost" 
                   disabled={currentPage <= 1}
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  style={{ opacity: currentPage <= 1 ? 0.4 : 1 }}
+                  style={{ opacity: currentPage <= 1 ? 0.4 : 1, padding: '4px 8px' }}
                 >
-                  <ChevronLeft size={20} />
+                  <ChevronLeft size={18} />
                 </button>
-                <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
                   Page {currentPage} of {numPages}
                 </span>
                 <button 
                   className="btn-ghost" 
                   disabled={currentPage >= numPages}
                   onClick={() => setCurrentPage(p => Math.min(numPages, p + 1))}
-                  style={{ opacity: currentPage >= numPages ? 0.4 : 1 }}
+                  style={{ opacity: currentPage >= numPages ? 0.4 : 1, padding: '4px 8px' }}
                 >
-                  <ChevronRight size={20} />
+                  <ChevronRight size={18} />
                 </button>
               </div>
 
-              {/* Zoom Controls */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <button className="btn-ghost" onClick={() => setPdfScale(s => Math.max(0.6, s - 0.2))}>
-                  <ZoomOut size={18} />
+                  <ZoomOut size={16} />
                 </button>
-                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', minWidth: '45px', textAlign: 'center' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', minWidth: '40px', textAlign: 'center' }}>
                   {Math.round(pdfScale * 100)}%
                 </span>
                 <button className="btn-ghost" onClick={() => setPdfScale(s => Math.min(2.5, s + 0.2))}>
-                  <ZoomIn size={18} />
+                  <ZoomIn size={16} />
                 </button>
               </div>
             </div>
@@ -356,11 +355,11 @@ export default function DocumentViewer({ mediaData, onBack }) {
             {/* Document Render Container */}
             <div style={{
               width: '100%',
-              maxWidth: '850px',
+              maxWidth: '900px',
               overflow: 'auto',
               display: 'flex',
               justifyContent: 'center',
-              padding: '14px 0',
+              padding: '10px 0',
               background: 'rgba(0, 0, 0, 0.25)',
               borderRadius: 'var(--radius-md)'
             }}>
@@ -368,11 +367,11 @@ export default function DocumentViewer({ mediaData, onBack }) {
                 <iframe 
                   src={pdfUrl} 
                   title={mediaData.title}
-                  style={{ width: '100%', height: '75vh', border: 'none', borderRadius: '8px' }}
+                  style={{ width: '100%', height: '80vh', border: 'none', borderRadius: '8px' }}
                 />
               ) : pdfLoading ? (
                 <div style={{ padding: '80px 0', color: 'var(--text-secondary)' }}>
-                  Loading document pages...
+                  Loading document...
                 </div>
               ) : (
                 <canvas 
@@ -381,7 +380,7 @@ export default function DocumentViewer({ mediaData, onBack }) {
                     maxWidth: '100%', 
                     height: 'auto', 
                     borderRadius: '4px', 
-                    boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+                    boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
                     background: '#ffffff'
                   }} 
                 />
@@ -396,46 +395,46 @@ export default function DocumentViewer({ mediaData, onBack }) {
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '12px',
-              marginBottom: '16px',
-              padding: '8px 16px',
+              gap: '10px',
+              marginBottom: '14px',
+              padding: '6px 14px',
               background: 'var(--bg-secondary)',
               borderRadius: 'var(--radius-md)',
               border: '1px solid var(--border-glass)'
             }}>
               <button className="btn-ghost" onClick={() => setImgZoom(z => Math.max(0.5, z - 0.2))}>
-                <ZoomOut size={18} /> Zoom Out
+                <ZoomOut size={16} />
               </button>
-              <button className="btn-ghost" onClick={() => { setImgZoom(1); setImgRotation(0); }}>
+              <button className="btn-ghost" onClick={() => { setImgZoom(1); setImgRotation(0); }} style={{ fontSize: '0.8rem' }}>
                 Reset
               </button>
               <button className="btn-ghost" onClick={() => setImgZoom(z => Math.min(3, z + 0.2))}>
-                <ZoomIn size={18} /> Zoom In
+                <ZoomIn size={16} />
               </button>
               <button className="btn-ghost" onClick={() => setImgRotation(r => (r + 90) % 360)}>
-                <RotateCw size={18} /> Rotate
+                <RotateCw size={16} />
               </button>
             </div>
 
             <div style={{
               overflow: 'auto',
               maxWidth: '100%',
-              maxHeight: '70vh',
+              maxHeight: '75vh',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '20px',
+              padding: '16px',
               borderRadius: 'var(--radius-md)',
               background: 'rgba(0, 0, 0, 0.3)'
             }}>
               <img 
-                src={mediaData.dataUrl || mediaData.url || mediaData.cloudUrl} 
+                src={mediaData.cloudUrl || mediaData.url || mediaData.dataUrl} 
                 alt={mediaData.title}
                 style={{
                   transform: `scale(${imgZoom}) rotate(${imgRotation}deg)`,
                   transition: 'transform 0.2s ease',
                   maxWidth: '100%',
-                  maxHeight: '65vh',
+                  maxHeight: '70vh',
                   objectFit: 'contain',
                   borderRadius: 'var(--radius-sm)',
                   boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
@@ -447,15 +446,15 @@ export default function DocumentViewer({ mediaData, onBack }) {
 
         {/* --- 3. VIDEO VIEWER --- */}
         {mediaData.type === 'video' && (
-          <div style={{ width: '100%', maxWidth: '800px' }}>
+          <div style={{ width: '100%', maxWidth: '850px' }}>
             <video 
               controls 
               autoPlay 
               playsInline 
-              src={mediaData.dataUrl || mediaData.url || mediaData.cloudUrl}
+              src={mediaData.cloudUrl || mediaData.url || mediaData.dataUrl}
               style={{
                 width: '100%',
-                maxHeight: '70vh',
+                maxHeight: '75vh',
                 borderRadius: 'var(--radius-md)',
                 boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
                 background: '#000'
@@ -466,25 +465,25 @@ export default function DocumentViewer({ mediaData, onBack }) {
 
         {/* --- 4. AUDIO VIEWER --- */}
         {mediaData.type === 'audio' && (
-          <div style={{ width: '100%', maxWidth: '600px', textAlign: 'center', padding: '40px 20px' }}>
+          <div style={{ width: '100%', maxWidth: '550px', textAlign: 'center', padding: '40px 20px' }}>
             <div style={{
-              width: '80px',
-              height: '80px',
+              width: '72px',
+              height: '72px',
               borderRadius: '50%',
               background: 'linear-gradient(135deg, #a855f7, #6366f1)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              margin: '0 auto 24px auto',
+              margin: '0 auto 20px auto',
               boxShadow: '0 0 30px rgba(168, 85, 247, 0.4)'
             }}>
-              <Music size={40} color="#fff" />
+              <Music size={36} color="#fff" />
             </div>
             <h3 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>{mediaData.title}</h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>Audio Voice Note / Track</p>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', fontSize: '0.85rem' }}>Audio Voice Recording</p>
             <audio 
               controls 
-              src={mediaData.dataUrl || mediaData.url || mediaData.cloudUrl} 
+              src={mediaData.cloudUrl || mediaData.url || mediaData.dataUrl} 
               style={{ width: '100%', outline: 'none' }}
             />
           </div>
@@ -494,7 +493,7 @@ export default function DocumentViewer({ mediaData, onBack }) {
         {(mediaData.type === 'text' || mediaData.type === 'link') && (
           <div style={{
             width: '100%',
-            maxWidth: '800px',
+            maxWidth: '850px',
             background: 'var(--bg-secondary)',
             padding: '24px',
             borderRadius: 'var(--radius-md)',
@@ -507,18 +506,18 @@ export default function DocumentViewer({ mediaData, onBack }) {
               fontSize: '1rem',
               userSelect: 'text'
             }}>
-              {mediaData.dataUrl || mediaData.url || mediaData.description}
+              {mediaData.cloudUrl || mediaData.url || mediaData.dataUrl || mediaData.description}
             </div>
 
             {mediaData.type === 'link' && (
               <div style={{ marginTop: '20px' }}>
                 <a 
-                  href={mediaData.dataUrl || mediaData.url} 
+                  href={mediaData.cloudUrl || mediaData.url || mediaData.dataUrl} 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="btn-primary"
                 >
-                  <LinkIcon size={18} /> Open Destination
+                  <LinkIcon size={16} /> Open Destination
                 </a>
               </div>
             )}
@@ -527,13 +526,6 @@ export default function DocumentViewer({ mediaData, onBack }) {
 
       </div>
 
-      {onBack && (
-        <div style={{ marginTop: '24px', textAlign: 'center' }}>
-          <button className="btn-secondary" onClick={onBack}>
-            <ArrowLeft size={18} /> Return to QR Studio & Scanner
-          </button>
-        </div>
-      )}
     </div>
   );
 }
