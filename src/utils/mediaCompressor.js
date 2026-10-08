@@ -7,8 +7,33 @@ import { getMediaFromVault, storeMediaInVault } from './mediaVault';
  * @param {Object} mediaData
  * @returns {string} Public clean URL
  */
+export function getPublicBaseUrl() {
+  const configured = (import.meta.env.VITE_PUBLIC_URL || '').trim().replace(/\/+$/, '');
+  return configured ? configured + '/' : window.location.origin + window.location.pathname;
+}
+
+/**
+ * Returns reasons why a QR link would not open on another device:
+ * the site is on localhost/private network, or the file only exists in this browser.
+ */
+export function getShareProblems(url) {
+  const problems = [];
+  try {
+    const host = new URL(url).hostname;
+    if (/^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host) || host.endsWith('.local')) {
+      problems.push(`This QR points to "${host}", which other devices cannot reach. Deploy the app (e.g. Vercel) and create the QR from the deployed site, or set VITE_PUBLIC_URL.`);
+    }
+  } catch {
+    // ignore malformed URL
+  }
+  if (url.includes('#/view?') && !url.includes('url=') && !url.includes('v=')) {
+    problems.push('The file is not uploaded to the cloud yet, so this QR only works in this browser. Wait for the upload to finish, or check your network / Supabase settings.');
+  }
+  return problems;
+}
+
 export function packMediaToViewerURL(mediaData) {
-  const baseUrl = window.location.origin + window.location.pathname;
+  const baseUrl = getPublicBaseUrl();
   const docId = mediaData.id || `doc_${Date.now()}`;
   
   // Store the full media in local IndexedDB vault for instant local preview/offline usage

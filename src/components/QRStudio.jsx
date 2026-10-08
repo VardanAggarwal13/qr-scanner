@@ -6,7 +6,7 @@ import {
   Palette, Sliders, Layers, RefreshCw, Smartphone, Printer, ExternalLink, AlertCircle, Cloud
 } from 'lucide-react';
 import QRCanvas from './QRCanvas';
-import { packMediaToViewerURL, fileToDataURL, compressImageFile } from '../utils/mediaCompressor';
+import { getShareProblems, packMediaToViewerURL, fileToDataURL, compressImageFile } from '../utils/mediaCompressor';
 import { saveCreatedDocument } from '../utils/storage';
 import { uploadMediaToCloud } from '../utils/cloudStorage';
 
@@ -589,6 +589,13 @@ export default function QRStudio({ onPreviewDocument }) {
                 </div>
               )}
             </div>
+
+            {generatedUrl && getShareProblems(generatedUrl).map((msg, i) => (
+              <div key={i} style={{ display: 'flex', gap: '8px', padding: '10px 12px', marginBottom: '12px', borderRadius: 'var(--radius-md)', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)', color: '#fbbf24', fontSize: '0.82rem', textAlign: 'left' }}>
+                <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <span>{msg}</span>
+              </div>
+            ))}
 
             {/* Action Buttons */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
