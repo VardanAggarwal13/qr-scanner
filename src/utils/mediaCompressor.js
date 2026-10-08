@@ -16,7 +16,7 @@ export function getPublicBaseUrl() {
  * Returns reasons why a QR link would not open on another device:
  * the site is on localhost/private network, or the file only exists in this browser.
  */
-export function getShareProblems(url) {
+export function getShareProblems(url, { checkUpload = true } = {}) {
   const problems = [];
   try {
     const host = new URL(url).hostname;
@@ -26,8 +26,8 @@ export function getShareProblems(url) {
   } catch {
     // ignore malformed URL
   }
-  if (url.includes('#/view?') && !url.includes('url=') && !url.includes('v=')) {
-    problems.push('The file is not uploaded to the cloud yet, so this QR only works in this browser. Wait for the upload to finish, or check your network / Supabase settings.');
+  if (checkUpload && url.includes('#/view?') && !url.includes('url=') && !url.includes('v=')) {
+    problems.push('The file is not uploaded to the cloud yet, so this QR only works in this browser. Click "Upload to Cloud & Create QR" first.');
   }
   return problems;
 }

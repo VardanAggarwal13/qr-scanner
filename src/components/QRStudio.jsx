@@ -645,7 +645,7 @@ export default function QRStudio({ onPreviewDocument }) {
               </div>
             )}
 
-            {generatedUrl && getShareProblems(generatedUrl).map((msg, i) => (
+            {generatedUrl && getShareProblems(generatedUrl, { checkUpload: !!pendingFile && !isUploading && !uploadError }).map((msg, i) => (
               <div key={i} style={{ display: 'flex', gap: '8px', padding: '10px 12px', marginBottom: '12px', borderRadius: 'var(--radius-md)', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)', color: '#fbbf24', fontSize: '0.82rem', textAlign: 'left' }}>
                 <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
                 <span>{msg}</span>
