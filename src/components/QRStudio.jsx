@@ -27,6 +27,7 @@ export default function QRStudio({ onPreviewDocument }) {
   const [description, setDescription] = useState('');
   const [author, setAuthor] = useState('');
   const [pin, setPin] = useState('');
+  const [directOpen, setDirectOpen] = useState(true);
   const [fileDataUrl, setFileDataUrl] = useState('');
   const [cloudUrl, setCloudUrl] = useState('');
   const [cloudProvider, setCloudProvider] = useState('');
@@ -73,8 +74,11 @@ export default function QRStudio({ onPreviewDocument }) {
     };
 
     const targetUrl = packMediaToViewerURL(mediaObj);
-    setGeneratedUrl(targetUrl);
-  }, [currentDocId, mediaType, title, description, author, pin, fileDataUrl, cloudUrl, fileName, externalUrl, textContent]);
+    // Direct mode: the QR holds the raw file URL, so phones open the PDF/image itself instead of this site
+    const isFileType = ['pdf', 'image', 'video', 'audio'].includes(mediaType);
+    const useDirect = directOpen && !pin && isFileType && cloudUrl.startsWith('http');
+    setGeneratedUrl(useDirect ? cloudUrl : targetUrl);
+  }, [currentDocId, directOpen, mediaType, title, description, author, pin, fileDataUrl, cloudUrl, fileName, externalUrl, textContent]);
 
   // Handle File Upload & Cloud Sync
   const handleFileUpload = async (e) => {
@@ -409,6 +413,17 @@ export default function QRStudio({ onPreviewDocument }) {
                 maxLength={8}
               />
             </div>
+
+            {/* Direct open */}
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '14px', fontSize: '0.85rem', cursor: 'pointer' }}>
+              <input type="checkbox" checked={directOpen} onChange={(e) => setDirectOpen(e.target.checked)} style={{ marginTop: '3px' }} />
+              <span>
+                <strong>Open the file directly when scanned</strong>
+                <span style={{ display: 'block', color: 'var(--text-secondary)' }}>
+                  Phones go straight to the PDF/image instead of this website. Not used when a passcode is set.
+                </span>
+              </span>
+            </label>
           </div>
 
           {/* Step 2: Custom QR Design & Styling */}
