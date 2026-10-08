@@ -37,6 +37,9 @@ export default function QRStudio({ onPreviewDocument }) {
   const [textContent, setTextContent] = useState('');
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
+  const [uploadError, setUploadError] = useState('');
+  const [pendingFile, setPendingFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // QR Styling State
   const [dotsStyle, setDotsStyle] = useState('rounded');
@@ -52,6 +55,7 @@ export default function QRStudio({ onPreviewDocument }) {
   const [copiedLink, setCopiedLink] = useState(false);
 
   const fileInputRef = useRef(null);
+  const needsUpload = ['pdf', 'image', 'audio', 'video'].includes(mediaType) && !cloudUrl;
 
   // Compute public QR target URL whenever inputs change
   useEffect(() => {
@@ -86,6 +90,9 @@ export default function QRStudio({ onPreviewDocument }) {
     if (!file) return;
 
     setIsProcessingFile(true);
+    setUploadError('');
+    setCloudUrl('');
+    setPendingFile(file);
     setFileName(file.name);
     setFileSize(file.size);
     if (!title) setTitle(file.name.replace(/\.[^/.]+$/, ''));
@@ -114,22 +121,33 @@ export default function QRStudio({ onPreviewDocument }) {
         setFileDataUrl(dataUrl);
       }
 
-      // 2. Upload to Cloud (Supabase Bucket / Instant CDN) for Global Public Phone Access
-      setUploadStatus('Syncing to Cloud Bucket for global phone access...');
-      const uploadRes = await uploadMediaToCloud(file, file.name);
-      if (uploadRes?.url) {
-        setCloudUrl(uploadRes.url);
-        setCloudProvider(uploadRes.provider);
-      }
-
-      try {
-        confetti({ particleCount: 35, spread: 65, origin: { y: 0.7 } });
-      } catch (e) {}
     } catch (err) {
-      console.warn('Cloud sync note (local fallback active):', err);
+      console.warn('Could not prepare local preview:', err);
     } finally {
       setIsProcessingFile(false);
       setUploadStatus('');
+    }
+  };
+
+  // Explicit upload to the storage bucket, triggered by the Upload button
+  const handleCloudUpload = async () => {
+    if (!pendingFile || isUploading) return;
+    setIsUploading(true);
+    setUploadError('');
+    try {
+      const uploadRes = await uploadMediaToCloud(pendingFile, pendingFile.name);
+      if (uploadRes?.url) {
+        setCloudUrl(uploadRes.url);
+        setCloudProvider(uploadRes.provider);
+        try {
+          confetti({ particleCount: 35, spread: 65, origin: { y: 0.7 } });
+        } catch (e) {}
+      }
+    } catch (err) {
+      console.warn('Cloud upload failed:', err);
+      setUploadError(err.message);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -304,10 +322,10 @@ export default function QRStudio({ onPreviewDocument }) {
                 {fileName ? (
                   <div>
                     <p style={{ fontWeight: 700, color: 'var(--success)', marginBottom: '4px' }}>
-                      ✓ File Attached: {fileName}
+                      {cloudUrl ? '✓' : '•'} File Selected: {fileName}
                     </p>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      <span>{(fileSize / 1024 / 1024).toFixed(2)} MB • Ready to Share</span>
+                      <span>{(fileSize / 1024 / 1024).toFixed(2)} MB • {cloudUrl ? 'Uploaded' : 'Not uploaded yet'}</span>
                     </div>
                   </div>
                 ) : (
@@ -321,6 +339,22 @@ export default function QRStudio({ onPreviewDocument }) {
                        mediaType === 'video' ? 'MP4, WEBM clips' : 'MP3, WAV voice recordings'}
                     </p>
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* Upload button: sends the attached file to the storage bucket */}
+            {(mediaType === 'pdf' || mediaType === 'image' || mediaType === 'audio' || mediaType === 'video') && pendingFile && (
+              <div style={{ marginBottom: '20px' }}>
+                {cloudUrl ? (
+                  <p style={{ color: 'var(--success)', fontWeight: 600, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <CheckCircle2 size={16} /> Uploaded{cloudProvider ? ` to ${cloudProvider}` : ''}. Your QR is ready to scan.
+                  </p>
+                ) : (
+                  <button className="btn-primary" onClick={handleCloudUpload} disabled={isUploading || isProcessingFile} style={{ width: '100%' }}>
+                    {isUploading ? <RefreshCw className="animate-spin" size={18} /> : <Upload size={18} />}
+                    {isUploading ? 'Uploading…' : 'Upload to Cloud & Create QR'}
+                  </button>
                 )}
               </div>
             )}
@@ -605,6 +639,12 @@ export default function QRStudio({ onPreviewDocument }) {
               )}
             </div>
 
+            {uploadError && (
+              <div style={{ padding: '10px 12px', marginBottom: '12px', borderRadius: 'var(--radius-md)', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#fca5a5', fontSize: '0.8rem', textAlign: 'left', wordBreak: 'break-word' }}>
+                <strong>Upload error:</strong> {uploadError}
+              </div>
+            )}
+
             {generatedUrl && getShareProblems(generatedUrl).map((msg, i) => (
               <div key={i} style={{ display: 'flex', gap: '8px', padding: '10px 12px', marginBottom: '12px', borderRadius: 'var(--radius-md)', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)', color: '#fbbf24', fontSize: '0.82rem', textAlign: 'left' }}>
                 <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
@@ -614,11 +654,11 @@ export default function QRStudio({ onPreviewDocument }) {
 
             {/* Action Buttons */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <button className="btn-primary" onClick={handleDownloadQR} style={{ width: '100%' }}>
+              <button className="btn-primary" onClick={handleDownloadQR} disabled={needsUpload} style={{ width: '100%', opacity: needsUpload ? 0.5 : 1 }}>
                 <Download size={18} /> Download High-Res QR (PNG)
               </button>
 
-              <button className="btn-secondary" onClick={handleCopyLink} style={{ width: '100%' }}>
+              <button className="btn-secondary" onClick={handleCopyLink} disabled={needsUpload} style={{ width: '100%', opacity: needsUpload ? 0.5 : 1 }}>
                 {copiedLink ? <CheckCircle2 size={16} color="var(--success)" /> : <Copy size={16} />}
                 <span>{copiedLink ? 'Copied Link!' : 'Copy Direct Link'}</span>
               </button>

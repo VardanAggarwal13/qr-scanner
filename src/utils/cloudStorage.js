@@ -41,6 +41,8 @@ export function saveSupabaseConfig(url, key, bucket) {
 export async function uploadMediaToCloud(file, customFileName) {
   const supabase = getSupabaseClient();
   const bucket = getActiveBucketName();
+  const failures = [];
+  if (!supabase) failures.push('Supabase is not configured in this build (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY missing)');
 
   // 1. Try Supabase Storage first if keys are configured
   if (supabase) {
@@ -59,6 +61,7 @@ export async function uploadMediaToCloud(file, customFileName) {
 
       if (error) {
         console.warn('Supabase upload error, falling back to public cloud upload:', error);
+        failures.push(`Supabase bucket "${bucket}": ${error.message}`);
       } else {
         const { data: publicUrlData } = supabase.storage
           .from(bucket)
@@ -73,6 +76,7 @@ export async function uploadMediaToCloud(file, customFileName) {
       }
     } catch (err) {
       console.warn('Supabase direct error:', err);
+      failures.push(`Supabase: ${err.message}`);
     }
   }
 
@@ -99,6 +103,7 @@ export async function uploadMediaToCloud(file, customFileName) {
     }
   } catch (err) {
     console.warn('Catbox upload fallback failed:', err);
+    failures.push(`catbox.moe: ${err.message}`);
   }
 
   // 3. ImgBB / Free image fallback if it's an image
@@ -123,5 +128,5 @@ export async function uploadMediaToCloud(file, customFileName) {
     }
   }
 
-  throw new Error('Could not upload file to cloud storage. Please check your Supabase credentials or network connection.');
+  throw new Error(`Cloud upload failed. ${failures.join(' | ')}`);
 }
