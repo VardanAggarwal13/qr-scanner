@@ -8,9 +8,15 @@ const DEFAULT_BUCKET = import.meta.env.VITE_SUPABASE_BUCKET || 'documents';
 /**
  * Gets active Supabase client if configured
  */
+export function getSupabaseUrl() {
+  const raw = (localStorage.getItem('qr_supabase_url') || DEFAULT_SUPABASE_URL).trim();
+  // tolerate pasted URLs like https://x.supabase.co/rest/v1/ or with a trailing slash
+  return raw.replace(/\/(rest|storage|auth)\/v1.*$/, '').replace(/\/+$/, '');
+}
+
 export function getSupabaseClient() {
-  const url = localStorage.getItem('qr_supabase_url') || DEFAULT_SUPABASE_URL;
-  const key = localStorage.getItem('qr_supabase_key') || DEFAULT_SUPABASE_ANON_KEY;
+  const url = getSupabaseUrl();
+  const key = (localStorage.getItem('qr_supabase_key') || DEFAULT_SUPABASE_ANON_KEY).trim();
 
   if (url && key) {
     try {
@@ -23,7 +29,7 @@ export function getSupabaseClient() {
 }
 
 export function getActiveBucketName() {
-  return localStorage.getItem('qr_supabase_bucket') || DEFAULT_BUCKET;
+  return (localStorage.getItem('qr_supabase_bucket') || DEFAULT_BUCKET).trim();
 }
 
 export function saveSupabaseConfig(url, key, bucket) {
@@ -33,100 +39,53 @@ export function saveSupabaseConfig(url, key, bucket) {
 }
 
 /**
- * Uploads a file to Supabase Storage Bucket or Instant Public Fallback
+ * Turns a raw Supabase/network error into a message that says what to fix.
+ */
+function explainUploadError(err, url, bucket) {
+  const msg = err?.message || String(err);
+  const host = url.replace(/^https?:\/\//, '');
+  if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+    return `Cannot reach Supabase at "${host}". The project URL is wrong, or the project is paused/deleted. Copy the Project URL from Supabase → Project Settings → API into VITE_SUPABASE_URL.`;
+  }
+  if (/bucket not found/i.test(msg)) {
+    return `Bucket "${bucket}" does not exist. Create it in Supabase → Storage (set it to Public), or fix VITE_SUPABASE_BUCKET.`;
+  }
+  if (/row-level security|violates|unauthorized|not allowed/i.test(msg)) {
+    return `Supabase refused the upload. In Storage → Policies, add an INSERT policy for the "anon" role on bucket "${bucket}".`;
+  }
+  if (/invalid (jwt|api key)|apikey/i.test(msg)) {
+    return 'Supabase rejected the key. Use the "anon public" key from Project Settings → API for VITE_SUPABASE_ANON_KEY.';
+  }
+  return `Supabase upload failed: ${msg}`;
+}
+
+/**
+ * Uploads a file to the Supabase Storage bucket and returns its public URL.
  * @param {File} file
- * @param {string} customFileName
  * @returns {Promise<{ url: string, provider: string }>}
  */
-export async function uploadMediaToCloud(file, customFileName) {
+export async function uploadMediaToCloud(file) {
   const supabase = getSupabaseClient();
   const bucket = getActiveBucketName();
-  const failures = [];
-  if (!supabase) failures.push('Supabase is not configured in this build (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY missing)');
 
-  // 1. Try Supabase Storage first if keys are configured
-  if (supabase) {
-    try {
-      const ext = file.name.split('.').pop() || 'bin';
-      const cleanName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
-      const filePath = `${cleanName}`;
-
-      const { data, error } = await supabase.storage
-        .from(bucket)
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: true,
-          contentType: file.type
-        });
-
-      if (error) {
-        console.warn('Supabase upload error, falling back to public cloud upload:', error);
-        failures.push(`Supabase bucket "${bucket}": ${error.message}`);
-      } else {
-        const { data: publicUrlData } = supabase.storage
-          .from(bucket)
-          .getPublicUrl(filePath);
-
-        if (publicUrlData?.publicUrl) {
-          return {
-            url: publicUrlData.publicUrl,
-            provider: 'Supabase Storage'
-          };
-        }
-      }
-    } catch (err) {
-      console.warn('Supabase direct error:', err);
-      failures.push(`Supabase: ${err.message}`);
-    }
+  if (!supabase) {
+    throw new Error('Supabase is not configured in this build. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (Production environment in Vercel) and redeploy.');
   }
 
-  // 2. Free Instant Public File Host Fallback (Catbox / Free File Host)
-  // This allows instant testing without requiring a backend or pre-configured credentials!
+  const ext = file.name.split('.').pop() || 'bin';
+  const filePath = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+
   try {
-    const formData = new FormData();
-    formData.append('reqtype', 'fileupload');
-    formData.append('fileToUpload', file);
-
-    const res = await fetch('https://catbox.moe/user/api.php', {
-      method: 'POST',
-      body: formData
-    });
-
-    if (res.ok) {
-      const publicUrl = await res.text();
-      if (publicUrl && publicUrl.startsWith('http')) {
-        return {
-          url: publicUrl.trim(),
-          provider: 'Instant Cloud CDN'
-        };
-      }
-    }
+    const { error } = await supabase.storage
+      .from(bucket)
+      .upload(filePath, file, { cacheControl: '3600', upsert: true, contentType: file.type });
+    if (error) throw error;
   } catch (err) {
-    console.warn('Catbox upload fallback failed:', err);
-    failures.push(`catbox.moe: ${err.message}`);
+    console.warn('Supabase upload error:', err);
+    throw new Error(explainUploadError(err, getSupabaseUrl(), bucket));
   }
 
-  // 3. ImgBB / Free image fallback if it's an image
-  if (file.type.startsWith('image/')) {
-    try {
-      const formData = new FormData();
-      formData.append('image', file);
-      // Free public client key for anonymous demo uploads
-      const res = await fetch('https://api.imgbb.com/1/upload?key=6d207e02198a847aa5ad3ac2292fc10a', {
-        method: 'POST',
-        body: formData
-      });
-      const json = await res.json();
-      if (json?.data?.url) {
-        return {
-          url: json.data.url,
-          provider: 'ImgBB Cloud'
-        };
-      }
-    } catch (err) {
-      console.warn('ImgBB fallback failed:', err);
-    }
-  }
-
-  throw new Error(`Cloud upload failed. ${failures.join(' | ')}`);
+  const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+  if (!data?.publicUrl) throw new Error('Upload worked but Supabase returned no public URL. Make the bucket Public.');
+  return { url: data.publicUrl, provider: 'Supabase Storage' };
 }

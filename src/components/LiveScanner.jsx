@@ -16,6 +16,9 @@ export default function LiveScanner({ onScanSuccess }) {
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const animFrameIdRef = useRef(null);
+  const onScanSuccessRef = useRef(onScanSuccess);
+  const lastHitRef = useRef({ value: '', at: 0 });
+  useEffect(() => { onScanSuccessRef.current = onScanSuccess; });
 
   // Play beep sound on scan
   const playBeep = () => {
@@ -136,10 +139,15 @@ export default function LiveScanner({ onScanSuccess }) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
           const result = await decodeQRCodeFromCanvas(canvas);
-          if (result && result.rawValue) {
+          const last = lastHitRef.current;
+          const isRepeat = result && result.rawValue === last.value && now - last.at < 4000;
+          if (result && result.rawValue && isRepeat) {
+            lastHitRef.current = { value: result.rawValue, at: now };
+          } else if (result && result.rawValue) {
+            lastHitRef.current = { value: result.rawValue, at: now };
             playBeep();
             if (navigator.vibrate) navigator.vibrate(80);
-            onScanSuccess({
+            onScanSuccessRef.current({
               rawValue: result.rawValue,
               format: result.format,
               method: 'Live Camera',
@@ -159,7 +167,7 @@ export default function LiveScanner({ onScanSuccess }) {
         cancelAnimationFrame(animFrameIdRef.current);
       }
     };
-  }, [isScanning, onScanSuccess]);
+  }, [isScanning]);
 
   // Torch Toggle
   const toggleTorch = async () => {

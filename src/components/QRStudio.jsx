@@ -135,7 +135,7 @@ export default function QRStudio({ onPreviewDocument }) {
     setIsUploading(true);
     setUploadError('');
     try {
-      const uploadRes = await uploadMediaToCloud(pendingFile, pendingFile.name);
+      const uploadRes = await uploadMediaToCloud(pendingFile);
       if (uploadRes?.url) {
         setCloudUrl(uploadRes.url);
         setCloudProvider(uploadRes.provider);
