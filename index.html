@@ -7,6 +7,39 @@
     <meta name="description" content="QRNova — High-Performance QR Scanner & Document Attacher. Attach PDFs, images, and media to QR codes and scan from any mobile or desktop device." />
     <meta name="theme-color" content="#090d16" />
     <title>QRNova — Document & Media QR Scanner Platform</title>
+    <style>html,body{background:#090d16;margin:0}</style>
+    <script>
+      // Scanned viewer link: start talking to the file server and downloading the file right now,
+      // in parallel with the app's own JavaScript, instead of after it has loaded and rendered.
+      (function () {
+        try {
+          var h = location.hash || '';
+          var q = h.indexOf('?');
+          if (h.indexOf('/view') < 0 || q < 0) return;
+          var p = new URLSearchParams(h.slice(q + 1));
+          var u = p.get('url');
+          if (!u || !/^https?:/i.test(u)) return;
+          var t = p.get('t') || '';
+          var pc = document.createElement('link');
+          pc.rel = 'preconnect'; pc.href = new URL(u).origin; pc.crossOrigin = '';
+          document.head.appendChild(pc);
+          if (t === 'pdf') {
+            window.__qrPre = { url: u, p: fetch(u).then(function (r) {
+              if (!r.ok) throw new Error('File server answered ' + r.status);
+              return r.arrayBuffer();
+            }) };
+            window.__qrPre.p.catch(function () {});
+          } else if (t === 'image') {
+            var l = document.createElement('link');
+            l.rel = 'preload'; l.as = 'image'; l.href = u;
+            document.head.appendChild(l);
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" />
   </head>
   <body>
     <div id="root"></div>

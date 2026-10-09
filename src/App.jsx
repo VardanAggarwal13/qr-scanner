@@ -1,26 +1,53 @@
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
-import QRStudio from './components/QRStudio';
-import LiveScanner from './components/LiveScanner';
-import MediaScanner from './components/MediaScanner';
-import HistoryView from './components/HistoryView';
-import ScanResultModal from './components/ScanResultModal';
 import DocumentViewer from './components/DocumentViewer';
 import ErrorBoundary from './components/ErrorBoundary';
-import { unpackMediaFromURL } from './utils/mediaCompressor';
+import { parseViewerLinkSync, unpackMediaFromURL } from './utils/mediaCompressor';
 import { addScanToHistory } from './utils/storage';
+
+// The creator / scanner screens (QR styling, camera, supabase, jsQR...) are big and a person
+// who only scanned a QR never needs them, so they are downloaded only when that tab is opened.
+const QRStudio = lazy(() => import('./components/QRStudio'));
+const LiveScanner = lazy(() => import('./components/LiveScanner'));
+const MediaScanner = lazy(() => import('./components/MediaScanner'));
+const HistoryView = lazy(() => import('./components/HistoryView'));
+const ScanResultModal = lazy(() => import('./components/ScanResultModal'));
+
+function looksLikeViewerLink() {
+  const hash = window.location.hash || window.location.search || '';
+  return hash.includes('/view') || hash.includes('url=') || hash.includes('id=') || hash.includes('v=');
+}
+
+function PageLoader() {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 16px', color: 'var(--text-secondary)' }}>
+      Loading…
+    </div>
+  );
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('create');
   const [theme, setTheme] = useState('dark');
   const [activeScanResult, setActiveScanResult] = useState(null);
-  const [activeDocumentView, setActiveDocumentView] = useState(null);
+  // A link with a public file URL is understood immediately, so the very first paint is already the
+  // viewer (no dashboard flash, no waiting on an effect or on IndexedDB).
+  const [activeDocumentView, setActiveDocumentView] = useState(() =>
+    looksLikeViewerLink() ? parseViewerLinkSync(window.location.hash || window.location.search) : null
+  );
+  const [resolvingLink, setResolvingLink] = useState(() => looksLikeViewerLink() && !activeDocumentView);
 
   // Check URL hash / parameters for shared document payloads (#/view?url=... or ?id=...)
   useEffect(() => {
     const handleHashChange = async () => {
       const hash = window.location.hash || window.location.search || '';
-      if (hash.includes('/view') || hash.includes('url=') || hash.includes('id=') || hash.includes('v=')) {
+      if (looksLikeViewerLink()) {
+        const quick = parseViewerLinkSync(hash);
+        if (quick) {
+          setActiveDocumentView(quick);
+          setResolvingLink(false);
+          return;
+        }
         try {
           const media = await unpackMediaFromURL(hash);
           if (media) {
@@ -30,9 +57,11 @@ export default function App() {
           console.error('Failed to unpack media from hash:', e);
         }
       }
+      setResolvingLink(false);
     };
 
-    handleHashChange();
+    if (!activeDocumentView) handleHashChange();
+    else setResolvingLink(false);
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
@@ -74,6 +103,10 @@ export default function App() {
     );
   }
 
+  if (resolvingLink) {
+    return <PageLoader />;
+  }
+
   // =========================================================================
   // 🛠️ CREATOR & SCANNER DASHBOARD (When opening the root home website)
   // =========================================================================
@@ -90,6 +123,7 @@ export default function App() {
 
         {/* Main Content View based on Tab */}
         <main style={{ flex: 1 }}>
+          <Suspense fallback={<PageLoader />}>
           {activeTab === 'create' && (
             <QRStudio 
               onPreviewDocument={(doc) => setActiveDocumentView(doc)} 
@@ -114,18 +148,21 @@ export default function App() {
               onOpenDocument={(doc) => setActiveDocumentView(doc)}
             />
           )}
+          </Suspense>
         </main>
 
         {/* Result Modal when QR is detected */}
         {activeScanResult && (
-          <ScanResultModal 
-            scanResult={activeScanResult}
-            onClose={() => setActiveScanResult(null)}
-            onOpenDocument={(doc) => {
-              setActiveScanResult(null);
-              setActiveDocumentView(doc);
-            }}
-          />
+          <Suspense fallback={null}>
+            <ScanResultModal
+              scanResult={activeScanResult}
+              onClose={() => setActiveScanResult(null)}
+              onOpenDocument={(doc) => {
+                setActiveScanResult(null);
+                setActiveDocumentView(doc);
+              }}
+            />
+          </Suspense>
         )}
 
         {/* Footer */}

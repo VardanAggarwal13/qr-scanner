@@ -10,6 +10,19 @@ import { getShareProblems, packMediaToViewerURL, fileToDataURL, compressImageFil
 import { saveCreatedDocument } from '../utils/storage';
 import { uploadMediaToCloud } from '../utils/cloudStorage';
 
+// Types whose content is a file uploaded to the storage bucket (a Rich Note is uploaded as a .txt file)
+const UPLOAD_TYPES = ['pdf', 'image', 'audio', 'video', 'file', 'text'];
+const FILE_PICKER_TYPES = ['pdf', 'image', 'audio', 'video', 'file'];
+
+function dataUrlToFile(dataUrl, fileName) {
+  const [head, b64] = dataUrl.split(',');
+  const mime = /data:([^;]+)/.exec(head)?.[1] || 'application/octet-stream';
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new File([bytes], fileName, { type: mime });
+}
+
 const GRADIENT_PRESETS = [
   { name: 'Electric Violet', color1: '#6366f1', color2: '#a855f7' },
   { name: 'Cyber Neon', color1: '#06b6d4', color2: '#3b82f6' },
@@ -55,7 +68,7 @@ export default function QRStudio({ onPreviewDocument }) {
   const [copiedLink, setCopiedLink] = useState(false);
 
   const fileInputRef = useRef(null);
-  const needsUpload = ['pdf', 'image', 'audio', 'video'].includes(mediaType) && !cloudUrl;
+  const needsUpload = UPLOAD_TYPES.includes(mediaType) && !cloudUrl;
 
   // Compute public QR target URL whenever inputs change
   useEffect(() => {
@@ -79,7 +92,7 @@ export default function QRStudio({ onPreviewDocument }) {
 
     const targetUrl = packMediaToViewerURL(mediaObj);
     // Direct mode: the QR holds the raw file URL, so phones open the PDF/image itself instead of this site
-    const isFileType = ['pdf', 'image', 'video', 'audio'].includes(mediaType);
+    const isFileType = ['pdf', 'image', 'video', 'audio', 'file'].includes(mediaType);
     const useDirect = directOpen && !pin && isFileType && cloudUrl.startsWith('http');
     setGeneratedUrl(useDirect ? cloudUrl : targetUrl);
   }, [currentDocId, directOpen, mediaType, title, description, author, pin, fileDataUrl, cloudUrl, fileName, externalUrl, textContent]);
@@ -102,8 +115,16 @@ export default function QRStudio({ onPreviewDocument }) {
       setUploadStatus('Preparing local preview...');
       if (file.type.startsWith('image/')) {
         setMediaType('image');
-        const compressedData = await compressImageFile(file, 1200, 0.85);
-        setFileDataUrl(compressedData);
+        const isPlainRaster = /^image\/(jpeg|png|webp)$/.test(file.type);
+        try {
+          // Phones shoot huge photos; a resized JPEG uploads faster and opens on every device
+          const compressedData = await compressImageFile(file, 1600, 0.85);
+          setFileDataUrl(compressedData);
+          if (isPlainRaster) setPendingFile(dataUrlToFile(compressedData, file.name.replace(/\.[^/.]+$/, '') + '.jpg'));
+        } catch {
+          // e.g. HEIC the browser cannot decode: keep the original file
+          setFileDataUrl('');
+        }
       } else if (file.type === 'application/pdf') {
         setMediaType('pdf');
         const dataUrl = await fileToDataURL(file);
@@ -117,8 +138,8 @@ export default function QRStudio({ onPreviewDocument }) {
         const dataUrl = await fileToDataURL(file);
         setFileDataUrl(dataUrl);
       } else {
-        const dataUrl = await fileToDataURL(file);
-        setFileDataUrl(dataUrl);
+        setMediaType('file');
+        setFileDataUrl('');
       }
 
     } catch (err) {
@@ -129,13 +150,30 @@ export default function QRStudio({ onPreviewDocument }) {
     }
   };
 
+  // Changing type must not leak the previous file / upload into the new QR
+  const switchType = (type) => {
+    if (type === mediaType) return;
+    setMediaType(type);
+    setPendingFile(null);
+    setCloudUrl('');
+    setCloudProvider('');
+    setFileDataUrl('');
+    setFileName('');
+    setFileSize(0);
+    setUploadError('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   // Explicit upload to the storage bucket, triggered by the Upload button
   const handleCloudUpload = async () => {
-    if (!pendingFile || isUploading) return;
+    const fileToUpload = mediaType === 'text'
+      ? new File([textContent], 'note.txt', { type: 'text/plain' })
+      : pendingFile;
+    if (!fileToUpload || isUploading) return;
     setIsUploading(true);
     setUploadError('');
     try {
-      const uploadRes = await uploadMediaToCloud(pendingFile);
+      const uploadRes = await uploadMediaToCloud(fileToUpload);
       if (uploadRes?.url) {
         setCloudUrl(uploadRes.url);
         setCloudProvider(uploadRes.provider);
@@ -248,6 +286,7 @@ export default function QRStudio({ onPreviewDocument }) {
                 { id: 'image', label: 'Image/Photo', icon: ImageIcon, color: '#10b981' },
                 { id: 'video', label: 'Video Clip', icon: Video, color: '#3b82f6' },
                 { id: 'audio', label: 'Audio/Voice', icon: Music, color: '#a855f7' },
+                { id: 'file', label: 'Any File', icon: FileText, color: '#eab308' },
                 { id: 'link', label: 'Web Link', icon: LinkIcon, color: '#06b6d4' },
                 { id: 'text', label: 'Rich Note', icon: FileText, color: '#f59e0b' },
               ].map(item => {
@@ -256,7 +295,7 @@ export default function QRStudio({ onPreviewDocument }) {
                 return (
                   <button
                     key={item.id}
-                    onClick={() => setMediaType(item.id)}
+                    onClick={() => switchType(item.id)}
                     style={{
                       padding: '12px 8px',
                       borderRadius: 'var(--radius-md)',
@@ -280,7 +319,7 @@ export default function QRStudio({ onPreviewDocument }) {
             </div>
 
             {/* Upload Zone for Files */}
-            {(mediaType === 'pdf' || mediaType === 'image' || mediaType === 'audio' || mediaType === 'video') && (
+            {FILE_PICKER_TYPES.includes(mediaType) && (
               <div 
                 onClick={() => fileInputRef.current?.click()}
                 style={{
@@ -301,7 +340,8 @@ export default function QRStudio({ onPreviewDocument }) {
                   accept={
                     mediaType === 'pdf' ? '.pdf,application/pdf' :
                     mediaType === 'image' ? 'image/*' :
-                    mediaType === 'video' ? 'video/*' : 'audio/*'
+                    mediaType === 'video' ? 'video/*' :
+                    mediaType === 'file' ? undefined : 'audio/*'
                   }
                   onChange={handleFileUpload}
                 />
@@ -331,12 +371,13 @@ export default function QRStudio({ onPreviewDocument }) {
                 ) : (
                   <div>
                     <p style={{ fontWeight: 600, marginBottom: '4px' }}>
-                      Click to upload {mediaType.toUpperCase()} file
+                      Click to choose {mediaType === 'file' ? 'any' : mediaType.toUpperCase()} file
                     </p>
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                       {mediaType === 'pdf' ? 'PDF brochures, menus, passes, invoices' :
                        mediaType === 'image' ? 'JPG, PNG, WEBP, SVG graphics' :
-                       mediaType === 'video' ? 'MP4, WEBM clips' : 'MP3, WAV voice recordings'}
+                       mediaType === 'video' ? 'MP4, WEBM clips' :
+                       mediaType === 'file' ? 'Word, Excel, PowerPoint, TXT, CSV, ZIP and more' : 'MP3, WAV voice recordings'}
                     </p>
                   </div>
                 )}
@@ -344,7 +385,7 @@ export default function QRStudio({ onPreviewDocument }) {
             )}
 
             {/* Upload button: sends the attached file to the storage bucket */}
-            {(mediaType === 'pdf' || mediaType === 'image' || mediaType === 'audio' || mediaType === 'video') && pendingFile && (
+            {((FILE_PICKER_TYPES.includes(mediaType) && pendingFile) || (mediaType === 'text' && textContent.trim())) && (
               <div style={{ marginBottom: '20px' }}>
                 {cloudUrl ? (
                   <p style={{ color: 'var(--success)', fontWeight: 600, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -386,7 +427,7 @@ export default function QRStudio({ onPreviewDocument }) {
                   rows={5}
                   placeholder="Type or paste your notice, event guidelines, instructions, or secret note here..."
                   value={textContent}
-                  onChange={(e) => setTextContent(e.target.value)}
+                  onChange={(e) => { setTextContent(e.target.value); setCloudUrl(''); }}
                   style={{ resize: 'vertical' }}
                 />
               </div>

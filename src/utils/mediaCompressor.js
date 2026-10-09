@@ -56,6 +56,7 @@ export function packMediaToViewerURL(mediaData) {
   }
 
   if (mediaData.type) params.set('t', mediaData.type);
+  if (mediaData.fileName && mediaData.fileName.length < 80) params.set('fn', mediaData.fileName);
   if (mediaData.title && mediaData.title.length < 50) params.set('title', mediaData.title);
   if (mediaData.author && mediaData.author.length < 30) params.set('author', mediaData.author);
   if (mediaData.pin) params.set('pin', mediaData.pin);
@@ -69,6 +70,31 @@ export function packMediaToViewerURL(mediaData) {
  * @param {string} hashOrQuery
  * @returns {Promise<Object|null>}
  */
+export function parseViewerLinkSync(hashOrQuery) {
+  try {
+    const rawHash = hashOrQuery.replace(/^#\/?/, '').replace(/^\?/, '');
+    const searchPart = rawHash.includes('?') ? rawHash.split('?')[1] : rawHash;
+    const params = new URLSearchParams(searchPart);
+    const publicUrl = params.get('url');
+    if (!publicUrl || !publicUrl.startsWith('http')) return null;
+    return {
+      id: params.get('id') || 'doc_' + publicUrl.slice(-24),
+      type: params.get('t') || inferTypeFromUrl(publicUrl),
+      title: params.get('title') || 'Attached Document',
+      description: params.get('desc') || '',
+      author: params.get('author') || '',
+      fileName: params.get('fn') || '',
+      dataUrl: publicUrl,
+      url: publicUrl,
+      cloudUrl: publicUrl,
+      pin: params.get('pin') || '',
+      timestamp: 0
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function unpackMediaFromURL(hashOrQuery) {
   try {
     const rawHash = hashOrQuery.replace(/^#\/?/, '').replace(/^\?/, '');
@@ -137,13 +163,13 @@ export async function unpackMediaFromURL(hashOrQuery) {
 }
 
 function inferTypeFromUrl(url) {
-  if (!url) return 'pdf';
-  const clean = url.toLowerCase();
+  if (!url) return 'file';
+  const clean = url.toLowerCase().split('?')[0];
   if (clean.endsWith('.pdf')) return 'pdf';
   if (clean.match(/\.(jpg|jpeg|png|webp|gif|svg)$/)) return 'image';
   if (clean.match(/\.(mp4|webm|mov|mkv)$/)) return 'video';
   if (clean.match(/\.(mp3|wav|ogg|m4a)$/)) return 'audio';
-  return 'pdf';
+  return 'file';
 }
 
 /**
@@ -182,8 +208,10 @@ export async function compressImageFile(file, maxWidth = 1200, quality = 0.8) {
         ctx.drawImage(img, 0, 0, w, h);
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
+      img.onerror = () => reject(new Error('Cannot decode image'));
       img.src = e.target.result;
     };
+    reader.onerror = () => reject(new Error('Cannot read image'));
     reader.readAsDataURL(file);
   });
 }

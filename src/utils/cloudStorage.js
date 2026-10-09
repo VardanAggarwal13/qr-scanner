@@ -9,14 +9,15 @@ const DEFAULT_BUCKET = import.meta.env.VITE_SUPABASE_BUCKET || 'documents';
  * Gets active Supabase client if configured
  */
 export function getSupabaseUrl() {
-  const raw = (localStorage.getItem('qr_supabase_url') || DEFAULT_SUPABASE_URL).trim();
+  // Build-time env wins: a stale value saved in this browser must not override a corrected .env / Vercel setting
+  const raw = (DEFAULT_SUPABASE_URL || localStorage.getItem('qr_supabase_url') || '').trim();
   // tolerate pasted URLs like https://x.supabase.co/rest/v1/ or with a trailing slash
   return raw.replace(/\/(rest|storage|auth)\/v1.*$/, '').replace(/\/+$/, '');
 }
 
 export function getSupabaseClient() {
   const url = getSupabaseUrl();
-  const key = (localStorage.getItem('qr_supabase_key') || DEFAULT_SUPABASE_ANON_KEY).trim();
+  const key = (DEFAULT_SUPABASE_ANON_KEY || localStorage.getItem('qr_supabase_key') || '').trim();
 
   if (url && key) {
     try {
@@ -29,7 +30,7 @@ export function getSupabaseClient() {
 }
 
 export function getActiveBucketName() {
-  return (localStorage.getItem('qr_supabase_bucket') || DEFAULT_BUCKET).trim();
+  return ((import.meta.env.VITE_SUPABASE_BUCKET || localStorage.getItem('qr_supabase_bucket')) || DEFAULT_BUCKET).trim();
 }
 
 export function saveSupabaseConfig(url, key, bucket) {
@@ -46,6 +47,12 @@ function explainUploadError(err, url, bucket) {
   const host = url.replace(/^https?:\/\//, '');
   if (/failed to fetch|networkerror|load failed/i.test(msg)) {
     return `Cannot reach Supabase at "${host}". The project URL is wrong, or the project is paused/deleted. Copy the Project URL from Supabase → Project Settings → API into VITE_SUPABASE_URL.`;
+  }
+  if (/exceeded the maximum|too large|payload/i.test(msg)) {
+    return 'This file is larger than the storage limit (50 MB on the free Supabase plan). Use a smaller file, or raise the limit in Supabase → Storage → Settings.';
+  }
+  if (/mime type/i.test(msg)) {
+    return `Bucket "${bucket}" does not allow this file type. Clear the allowed MIME types in the bucket settings in Supabase → Storage.`;
   }
   if (/bucket not found/i.test(msg)) {
     return `Bucket "${bucket}" does not exist. Create it in Supabase → Storage (set it to Public), or fix VITE_SUPABASE_BUCKET.`;
@@ -78,7 +85,7 @@ export async function uploadMediaToCloud(file) {
   try {
     const { error } = await supabase.storage
       .from(bucket)
-      .upload(filePath, file, { cacheControl: '3600', upsert: true, contentType: file.type });
+      .upload(filePath, file, { cacheControl: '31536000', upsert: false, contentType: file.type || 'application/octet-stream' });
     if (error) throw error;
   } catch (err) {
     console.warn('Supabase upload error:', err);

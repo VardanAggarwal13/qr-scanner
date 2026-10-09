@@ -4,10 +4,16 @@ import {
   Download, Share2, Printer, ArrowLeft, ZoomIn, ZoomOut, RotateCw, 
   ChevronLeft, ChevronRight, Eye, Shield, Lock, CheckCircle2, Copy, ExternalLink, QrCode
 } from 'lucide-react';
-import * as pdfjsLib from 'pdfjs-dist';
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { loadPdfjs, takePrefetchedFile } from '../utils/pdfjsLoader';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+const OFFICE_EXTS = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
+const TEXT_EXTS = ['txt', 'csv', 'md', 'json', 'log', 'xml', 'tsv'];
+
+function getFileExt(mediaData) {
+  const src = (mediaData?.fileName || (mediaData?.cloudUrl || mediaData?.url || '').split('?')[0] || '').toLowerCase();
+  const m = /\.([a-z0-9]+)$/.exec(src);
+  return m ? m[1] : '';
+}
 
 export default function DocumentViewer({ mediaData, onBack }) {
   const [activePin, setActivePin] = useState('');
@@ -19,9 +25,13 @@ export default function DocumentViewer({ mediaData, onBack }) {
   const [pdfDoc, setPdfDoc] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [numPages, setNumPages] = useState(1);
-  const [pdfScale, setPdfScale] = useState(1.4);
+  const [pdfScale, setPdfScale] = useState(1);
   const [pdfLoading, setPdfLoading] = useState(false);
-  const [useIframeView, setUseIframeView] = useState(false);
+  const [pdfError, setPdfError] = useState('');
+
+  // Text / CSV / Rich Note content fetched from the stored file
+  const [remoteText, setRemoteText] = useState('');
+  const [remoteTextError, setRemoteTextError] = useState('');
   const pdfCanvasRef = useRef(null);
 
   // Image Viewer State
@@ -41,6 +51,24 @@ export default function DocumentViewer({ mediaData, onBack }) {
 
   const pdfUrl = mediaData?.cloudUrl || mediaData?.url || mediaData?.dataUrl;
 
+  const fileExt = getFileExt(mediaData);
+  const isHttp = /^https?:/i.test(pdfUrl || '');
+  const wantsText = !!mediaData && isUnlocked && isHttp &&
+    (mediaData.type === 'text' || (mediaData.type === 'file' && TEXT_EXTS.includes(fileExt)));
+
+  useEffect(() => {
+    if (!wantsText) return;
+    let isMounted = true;
+    fetch(pdfUrl)
+      .then((res) => {
+        if (!res.ok) throw new Error('File server answered ' + res.status);
+        return res.text();
+      })
+      .then((text) => { if (isMounted) setRemoteText(text); })
+      .catch((err) => { if (isMounted) setRemoteTextError(err.message); });
+    return () => { isMounted = false; };
+  }, [wantsText, pdfUrl]);
+
   // Load PDF if type is PDF
   useEffect(() => {
     if (!mediaData || mediaData.type !== 'pdf' || !isUnlocked || !pdfUrl) return;
@@ -50,7 +78,17 @@ export default function DocumentViewer({ mediaData, onBack }) {
 
     const loadPdf = async () => {
       try {
-        const loadingTask = pdfjsLib.getDocument(pdfUrl);
+        // Download (or reuse the download index.html already started) in parallel with loading PDF.js itself
+        let bytesPromise = null;
+        if (/^https?:/i.test(pdfUrl)) {
+          bytesPromise = takePrefetchedFile(pdfUrl) || fetch(pdfUrl).then((res) => {
+            if (!res.ok) throw new Error(`File server answered ${res.status}`);
+            return res.arrayBuffer();
+          });
+        }
+        const [pdfjsLib, buffer] = await Promise.all([loadPdfjs(), bytesPromise]);
+        // PDF.js 6 only accepts an options object, never a bare string
+        const loadingTask = pdfjsLib.getDocument(buffer ? { data: new Uint8Array(buffer) } : { url: pdfUrl });
         const doc = await loadingTask.promise;
         if (isMounted) {
           setPdfDoc(doc);
@@ -59,9 +97,9 @@ export default function DocumentViewer({ mediaData, onBack }) {
           setPdfLoading(false);
         }
       } catch (err) {
-        console.warn('PDF.js canvas render fallback, switching to native embedded viewer:', err);
+        console.warn('PDF.js failed to load the document:', err);
         if (isMounted) {
-          setUseIframeView(true);
+          setPdfError(err?.message || String(err));
           setPdfLoading(false);
         }
       }
@@ -79,13 +117,21 @@ export default function DocumentViewer({ mediaData, onBack }) {
     const renderPage = async () => {
       try {
         const page = await pdfDoc.getPage(currentPage);
-        const viewport = page.getViewport({ scale: pdfScale });
         const canvas = pdfCanvasRef.current;
         if (!canvas) return;
+
+        // Fit the page to the screen width (sharp on high-DPI phones, no sideways scrolling), then apply zoom
+        const base = page.getViewport({ scale: 1 });
+        const avail = Math.max(240, (canvas.parentElement?.clientWidth || 360) - 8);
+        const cssScale = (avail / base.width) * pdfScale;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const viewport = page.getViewport({ scale: cssScale * dpr });
 
         const context = canvas.getContext('2d');
         canvas.height = viewport.height;
         canvas.width = viewport.width;
+        canvas.style.width = Math.round(viewport.width / dpr) + 'px';
+        canvas.style.height = Math.round(viewport.height / dpr) + 'px';
 
         const renderContext = {
           canvasContext: context,
@@ -112,7 +158,7 @@ export default function DocumentViewer({ mediaData, onBack }) {
     const link = document.createElement('a');
     link.href = fileSource;
     link.target = '_blank';
-    link.download = mediaData.fileName || `${mediaData.title || 'document'}.${mediaData.type === 'pdf' ? 'pdf' : 'png'}`;
+    link.download = mediaData.fileName || `${mediaData.title || 'document'}${getFileExt(mediaData) ? '.' + getFileExt(mediaData) : ''}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -366,12 +412,16 @@ export default function DocumentViewer({ mediaData, onBack }) {
               background: 'rgba(0, 0, 0, 0.25)',
               borderRadius: 'var(--radius-md)'
             }}>
-              {useIframeView ? (
-                <iframe 
-                  src={pdfUrl} 
-                  title={mediaData.title}
-                  style={{ width: '100%', height: '80vh', border: 'none', borderRadius: '8px' }}
-                />
+              {pdfError ? (
+                <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                  <p style={{ marginBottom: '8px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    Could not display this PDF here.
+                  </p>
+                  <p style={{ fontSize: '0.8rem', marginBottom: '16px', wordBreak: 'break-word' }}>{pdfError}</p>
+                  <a className="btn-primary" href={pdfUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink size={16} /> Open PDF
+                  </a>
+                </div>
               ) : pdfLoading ? (
                 <div style={{ padding: '80px 0', color: 'var(--text-secondary)' }}>
                   Loading document...
@@ -380,8 +430,6 @@ export default function DocumentViewer({ mediaData, onBack }) {
                 <canvas 
                   ref={pdfCanvasRef} 
                   style={{ 
-                    maxWidth: '100%', 
-                    height: 'auto', 
                     borderRadius: '4px', 
                     boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
                     background: '#ffffff'
@@ -433,6 +481,8 @@ export default function DocumentViewer({ mediaData, onBack }) {
               <img 
                 src={mediaData.cloudUrl || mediaData.url || mediaData.dataUrl} 
                 alt={mediaData.title}
+                fetchPriority="high"
+                decoding="async"
                 style={{
                   transform: `scale(${imgZoom}) rotate(${imgRotation}deg)`,
                   transition: 'transform 0.2s ease',
@@ -451,9 +501,9 @@ export default function DocumentViewer({ mediaData, onBack }) {
         {mediaData.type === 'video' && (
           <div style={{ width: '100%', maxWidth: '850px' }}>
             <video 
-              controls 
-              autoPlay 
-              playsInline 
+              controls
+              preload="metadata"
+              playsInline
               src={mediaData.cloudUrl || mediaData.url || mediaData.dataUrl}
               style={{
                 width: '100%',
@@ -484,15 +534,16 @@ export default function DocumentViewer({ mediaData, onBack }) {
             </div>
             <h3 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>{mediaData.title}</h3>
             <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', fontSize: '0.85rem' }}>Audio Voice Recording</p>
-            <audio 
-              controls 
+            <audio
+              controls
+              preload="metadata"
               src={mediaData.cloudUrl || mediaData.url || mediaData.dataUrl} 
               style={{ width: '100%', outline: 'none' }}
             />
           </div>
         )}
 
-        {/* --- 5. TEXT / MARKDOWN / NOTE VIEWER --- */}
+        {/* --- 5. TEXT / NOTE / LINK VIEWER --- */}
         {(mediaData.type === 'text' || mediaData.type === 'link') && (
           <div style={{
             width: '100%',
@@ -507,16 +558,19 @@ export default function DocumentViewer({ mediaData, onBack }) {
               lineHeight: 1.7,
               color: 'var(--text-primary)',
               fontSize: '1rem',
-              userSelect: 'text'
+              userSelect: 'text',
+              wordBreak: 'break-word'
             }}>
-              {mediaData.cloudUrl || mediaData.url || mediaData.dataUrl || mediaData.description}
+              {mediaData.type === 'text' && isHttp
+                ? (remoteTextError ? 'Could not load this note: ' + remoteTextError : (remoteText || 'Loading note…'))
+                : (mediaData.cloudUrl || mediaData.url || mediaData.dataUrl || mediaData.description)}
             </div>
 
             {mediaData.type === 'link' && (
               <div style={{ marginTop: '20px' }}>
-                <a 
-                  href={mediaData.cloudUrl || mediaData.url || mediaData.dataUrl} 
-                  target="_blank" 
+                <a
+                  href={mediaData.cloudUrl || mediaData.url || mediaData.dataUrl}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="btn-primary"
                 >
@@ -524,6 +578,60 @@ export default function DocumentViewer({ mediaData, onBack }) {
                 </a>
               </div>
             )}
+          </div>
+        )}
+
+        {/* --- 6. ANY OTHER FILE: Office documents, text/CSV, archives, everything else --- */}
+        {mediaData.type === 'file' && (
+          <div style={{ width: '100%', maxWidth: '900px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+            {OFFICE_EXTS.includes(fileExt) && isHttp && (
+              <iframe
+                src={'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(pdfUrl)}
+                title={mediaData.title}
+                style={{ width: '100%', height: '70vh', border: 'none', borderRadius: '8px', background: '#fff' }}
+              />
+            )}
+
+            {TEXT_EXTS.includes(fileExt) && isHttp && (
+              <pre style={{
+                width: '100%',
+                maxHeight: '70vh',
+                overflow: 'auto',
+                margin: 0,
+                padding: '16px',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-glass)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--text-primary)',
+                fontSize: '0.85rem',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                userSelect: 'text'
+              }}>
+                {remoteTextError ? 'Could not load this file: ' + remoteTextError : (remoteText || 'Loading…')}
+              </pre>
+            )}
+
+            {!OFFICE_EXTS.includes(fileExt) && !TEXT_EXTS.includes(fileExt) && (
+              <div style={{ textAlign: 'center', padding: '30px 10px' }}>
+                <FileText size={56} color="var(--accent-primary)" style={{ marginBottom: '12px' }} />
+                <p style={{ fontWeight: 700, marginBottom: '6px', wordBreak: 'break-word' }}>
+                  {mediaData.fileName || mediaData.title}
+                </p>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                  This file type cannot be previewed in the browser. Download it to open it on your device.
+                </p>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button className="btn-primary" onClick={handleDownload}>
+                <Download size={16} /> Download file
+              </button>
+              <a className="btn-secondary" href={pdfUrl} target="_blank" rel="noopener noreferrer">
+                <ExternalLink size={16} /> Open in new tab
+              </a>
+            </div>
           </div>
         )}
 
