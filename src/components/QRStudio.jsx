@@ -27,7 +27,7 @@ export default function QRStudio({ onPreviewDocument }) {
   const [description, setDescription] = useState('');
   const [author, setAuthor] = useState('');
   const [pin, setPin] = useState('');
-  const [directOpen, setDirectOpen] = useState(true);
+  const [directOpen, setDirectOpen] = useState(false);
   const [fileDataUrl, setFileDataUrl] = useState('');
   const [cloudUrl, setCloudUrl] = useState('');
   const [cloudProvider, setCloudProvider] = useState('');
@@ -452,9 +452,9 @@ export default function QRStudio({ onPreviewDocument }) {
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '14px', fontSize: '0.85rem', cursor: 'pointer' }}>
               <input type="checkbox" checked={directOpen} onChange={(e) => setDirectOpen(e.target.checked)} style={{ marginTop: '3px' }} />
               <span>
-                <strong>Open the file directly when scanned</strong>
+                <strong>Skip the viewer: link straight to the raw file</strong>
                 <span style={{ display: 'block', color: 'var(--text-secondary)' }}>
-                  Phones go straight to the PDF/image instead of this website. Not used when a passcode is set.
+                  Off (recommended): scanning opens your website and shows the document. On: phones open the raw file, and PDFs usually just download.
                 </span>
               </span>
             </label>
