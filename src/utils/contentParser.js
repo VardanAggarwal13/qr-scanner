@@ -1,7 +1,9 @@
+import { parseViewerLinkSync } from './mediaCompressor.js';
+
 /**
  * Categorizes and parses any scanned QR code payload
  * @param {string} text
- * @returns {Object} { type, title, details, actions, raw }
+ * @returns {Object} { type, title, details, actions, raw, mediaData }
  */
 export function parseQRContent(text) {
   if (!text || typeof text !== 'string') {
@@ -11,12 +13,14 @@ export function parseQRContent(text) {
   const trimmed = text.trim();
 
   // 1. Check if it's our rich Document / Media Viewer link!
-  if (trimmed.includes('#/view') || trimmed.includes('/view?id=') || trimmed.includes('/view?v=')) {
+  if (trimmed.includes('#/view') || trimmed.includes('/view?') || trimmed.includes('/view#') || (trimmed.includes('/view') && (trimmed.includes('url=') || trimmed.includes('id=') || trimmed.includes('v=')))) {
+    const parsedMedia = parseViewerLinkSync(trimmed);
     return {
       type: 'attached_media',
-      title: 'Attached Document & Media',
-      details: 'This QR code contains an attached document/media. Click below to open and view it in high resolution.',
+      title: parsedMedia?.title || 'Attached Document & Media',
+      details: parsedMedia?.fileName ? `Attached File: ${parsedMedia.fileName}` : 'This QR code contains an attached document/media. Click below to open and view it in high resolution.',
       raw: trimmed,
+      mediaData: parsedMedia,
       actions: ['view_document', 'copy_link', 'share']
     };
   }
@@ -47,13 +51,21 @@ export function parseQRContent(text) {
 
   // 3. vCard Contact (BEGIN:VCARD ... END:VCARD)
   if (trimmed.toUpperCase().includes('BEGIN:VCARD')) {
-    const fnMatch = trimmed.match(/FN:(.+)/i) || trimmed.match(/N:([^;]+);([^;]+)/i);
-    const telMatch = trimmed.match(/TEL.*:(.+)/i);
-    const emailMatch = trimmed.match(/EMAIL.*:(.+)/i);
-    const orgMatch = trimmed.match(/ORG:(.+)/i);
-    const titleMatch = trimmed.match(/TITLE:(.+)/i);
+    const fnMatch = trimmed.match(/^FN:(.+)$/im);
+    const nMatch = trimmed.match(/^N:([^;\r\n]*);([^;\r\n]*)/im);
+    const telMatch = trimmed.match(/TEL.*:(.+)/im);
+    const emailMatch = trimmed.match(/EMAIL.*:(.+)/im);
+    const orgMatch = trimmed.match(/ORG:(.+)/im);
+    const titleMatch = trimmed.match(/TITLE:(.+)/im);
 
-    const name = fnMatch ? (fnMatch[1] || `${fnMatch[2]} ${fnMatch[1]}`).trim() : 'Contact Card';
+    let name = 'Contact Card';
+    if (fnMatch && fnMatch[1]?.trim()) {
+      name = fnMatch[1].trim();
+    } else if (nMatch) {
+      const lastName = (nMatch[1] || '').trim();
+      const firstName = (nMatch[2] || '').trim();
+      name = `${firstName} ${lastName}`.trim() || 'Contact Card';
+    }
     const phone = telMatch ? telMatch[1].trim() : '';
     const email = emailMatch ? emailMatch[1].trim() : '';
     const org = orgMatch ? orgMatch[1].trim() : '';

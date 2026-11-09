@@ -1,7 +1,9 @@
-import React from 'react';
-import { QrCode, Camera, FileUp, Sparkles, History, Sun, Moon } from 'lucide-react';
+import React, { useState } from 'react';
+import { QrCode, Camera, FileUp, Sparkles, History, Sun, Moon, Database } from 'lucide-react';
+import SupabaseSettingsModal from './SupabaseSettingsModal';
 
 export default function Navbar({ activeTab, setActiveTab, theme, toggleTheme }) {
+  const [showSettings, setShowSettings] = useState(false);
   const tabs = [
     { id: 'create', label: 'Create QR', icon: Sparkles },
     { id: 'camera', label: 'Live Scanner', icon: Camera },
@@ -94,8 +96,17 @@ export default function Navbar({ activeTab, setActiveTab, theme, toggleTheme }) 
           })}
         </nav>
 
-        {/* Theme Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Settings & Theme Toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button 
+            className="btn-ghost" 
+            onClick={() => setShowSettings(true)}
+            title="Configure Cloud Storage (Supabase)"
+            style={{ borderRadius: '50%', width: '38px', height: '38px', padding: 0, justifyContent: 'center' }}
+          >
+            <Database size={18} color="var(--accent-secondary)" />
+          </button>
+
           <button 
             className="btn-ghost" 
             onClick={toggleTheme}
@@ -107,6 +118,10 @@ export default function Navbar({ activeTab, setActiveTab, theme, toggleTheme }) 
         </div>
 
       </div>
+
+      {showSettings && (
+        <SupabaseSettingsModal onClose={() => setShowSettings(false)} />
+      )}
     </header>
   );
 }

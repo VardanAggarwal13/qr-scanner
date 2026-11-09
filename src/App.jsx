@@ -14,8 +14,8 @@ const HistoryView = lazy(() => import('./components/HistoryView'));
 const ScanResultModal = lazy(() => import('./components/ScanResultModal'));
 
 function looksLikeViewerLink() {
-  const hash = window.location.hash || window.location.search || '';
-  return hash.includes('/view') || hash.includes('url=') || hash.includes('id=') || hash.includes('v=');
+  const full = (window.location.pathname || '') + (window.location.search || '') + (window.location.hash || '');
+  return full.includes('/view') || full.includes('url=') || full.includes('id=') || full.includes('v=');
 }
 
 function PageLoader() {
@@ -33,14 +33,14 @@ export default function App() {
   // A link with a public file URL is understood immediately, so the very first paint is already the
   // viewer (no dashboard flash, no waiting on an effect or on IndexedDB).
   const [activeDocumentView, setActiveDocumentView] = useState(() =>
-    looksLikeViewerLink() ? parseViewerLinkSync(window.location.hash || window.location.search) : null
+    looksLikeViewerLink() ? parseViewerLinkSync(window.location.hash || window.location.search || window.location.href) : null
   );
   const [resolvingLink, setResolvingLink] = useState(() => looksLikeViewerLink() && !activeDocumentView);
 
   // Check URL hash / parameters for shared document payloads (#/view?url=... or ?id=...)
   useEffect(() => {
     const handleHashChange = async () => {
-      const hash = window.location.hash || window.location.search || '';
+      const hash = window.location.hash || window.location.search || window.location.href || '';
       if (looksLikeViewerLink()) {
         const quick = parseViewerLinkSync(hash);
         if (quick) {
@@ -63,7 +63,11 @@ export default function App() {
     if (!activeDocumentView) handleHashChange();
     else setResolvingLink(false);
     window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handleHashChange);
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('popstate', handleHashChange);
+    };
   }, []);
 
   // Theme switcher

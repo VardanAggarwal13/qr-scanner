@@ -45,6 +45,9 @@ export function saveSupabaseConfig(url, key, bucket) {
 function explainUploadError(err, url, bucket) {
   const msg = err?.message || String(err);
   const host = url.replace(/^https?:\/\//, '');
+  if (/databasetimeout|connection.*timed out|544/i.test(msg)) {
+    return `Your Supabase project (${host}) is PAUSED. Supabase automatically pauses free-tier projects after 7 days of inactivity. Go to your Supabase Dashboard (https://supabase.com/dashboard/project/${host.split('.')[0]}), click "Restore project", wait 1-2 minutes, and retry!`;
+  }
   if (/failed to fetch|networkerror|load failed/i.test(msg)) {
     return `Cannot reach Supabase at "${host}". The project URL is wrong, or the project is paused/deleted. Copy the Project URL from Supabase → Project Settings → API into VITE_SUPABASE_URL.`;
   }

@@ -1,16 +1,11 @@
-import * as pdfjsLib from 'pdfjs-dist';
+import { loadPdfjs } from './pdfjsLoader';
 import { decodeQRCodeFromCanvas } from './qrDecoder';
-
-// Set up worker source
-if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '4.10.38'}/pdf.worker.min.mjs`;
-}
 
 /**
  * Scans a PDF file for QR codes across all pages
  * @param {File | Blob | ArrayBuffer} file
  * @param {Function} onProgress - callback (currentPage, totalPages)
- * @returns {Promise<Array<{page: number, rawValue: string, format: string, thumbnail: string}>>}
+ * @returns {Promise<{totalPages: number, detectedCodes: Array<{page: number, totalPages: number, rawValue: string, format: string, thumbnail: string, fullImage: string}>}>}
  */
 export async function scanPDFForQRCodes(file, onProgress) {
   let arrayBuffer;
@@ -20,7 +15,8 @@ export async function scanPDFForQRCodes(file, onProgress) {
     arrayBuffer = await file.arrayBuffer();
   }
 
-  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  const pdfjsLib = await loadPdfjs();
+  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
   const pdf = await loadingTask.promise;
   const numPages = pdf.numPages;
   const detectedCodes = [];

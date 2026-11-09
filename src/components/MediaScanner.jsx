@@ -202,8 +202,10 @@ export default function MediaScanner({ onScanSuccess }) {
             style={{ display: 'none' }}
             accept="image/*,.pdf,application/pdf,video/*"
             onChange={(e) => {
-              if (e.target.files?.[0]) {
-                handleProcessFile(e.target.files[0]);
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) {
+                handleProcessFile(file);
               }
             }}
           />

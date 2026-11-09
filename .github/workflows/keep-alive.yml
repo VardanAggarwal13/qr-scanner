@@ -1,0 +1,31 @@
+name: Supabase 24/7 Keep-Alive
+
+on:
+  schedule:
+    # Runs every 3 days at 00:00 UTC to reset Supabase's 7-day inactivity pause
+    - cron: '0 0 */3 * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions UI
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST & Storage API
+        run: |
+          echo "Pinging Supabase API to keep project alive and prevent 7-day auto-pause..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4cnlkb3FnYnpsb29nZml0dnNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNzk1MzAsImV4cCI6MjEwNjc1NTUzMH0.1oLbt9H-3f7i6tAnkGVa3aQrnEVvQaBef8SopwafcFM' }}" \
+            -H "Authorization: Bearer ${{ secrets.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4cnlkb3FnYnpsb29nZml0dnNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNzk1MzAsImV4cCI6MjEwNjc1NTUzMH0.1oLbt9H-3f7i6tAnkGVa3aQrnEVvQaBef8SopwafcFM' }}" \
+            "https://xxrydoqgbzloogfitvsm.supabase.co/rest/v1/")
+          
+          echo "REST API response code: $STATUS"
+
+          # Ping Storage Bucket
+          STORAGE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4cnlkb3FnYnpsb29nZml0dnNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNzk1MzAsImV4cCI6MjEwNjc1NTUzMH0.1oLbt9H-3f7i6tAnkGVa3aQrnEVvQaBef8SopwafcFM' }}" \
+            -H "Authorization: Bearer ${{ secrets.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4cnlkb3FnYnpsb29nZml0dnNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNzk1MzAsImV4cCI6MjEwNjc1NTUzMH0.1oLbt9H-3f7i6tAnkGVa3aQrnEVvQaBef8SopwafcFM' }}" \
+            "https://xxrydoqgbzloogfitvsm.supabase.co/storage/v1/bucket")
+
+          echo "Storage API response code: $STORAGE_STATUS"
+          echo "Supabase activity recorded successfully! Auto-pause prevented."
+

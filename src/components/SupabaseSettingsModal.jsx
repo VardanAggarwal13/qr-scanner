@@ -8,6 +8,7 @@ export default function SupabaseSettingsModal({ onClose }) {
   const [bucketName, setBucketName] = useState(() => getActiveBucketName());
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [testingStatus, setTestingStatus] = useState('');
+  const [testErrorMessage, setTestErrorMessage] = useState('');
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -21,22 +22,31 @@ export default function SupabaseSettingsModal({ onClose }) {
 
   const handleTestConnection = async () => {
     setTestingStatus('testing');
+    setTestErrorMessage('');
     try {
       saveSupabaseConfig(supabaseUrl, supabaseKey, bucketName);
       const client = getSupabaseClient();
       if (!client) {
         setTestingStatus('error');
+        setTestErrorMessage('Invalid Supabase URL or Anon Key. Please check the values.');
         return;
       }
       const { data, error } = await client.storage.from(bucketName).list('', { limit: 1 });
       if (error) {
         console.error('Bucket test error:', error);
         setTestingStatus('error');
+        const msg = error.message || String(error);
+        if (/timeout|544|connection/i.test(msg)) {
+          setTestErrorMessage('Your Supabase project is PAUSED by Supabase due to inactivity. Go to your Supabase dashboard and click "Restore project", wait 1-2 minutes, then test again.');
+        } else {
+          setTestErrorMessage(msg);
+        }
       } else {
         setTestingStatus('success');
       }
     } catch (e) {
       setTestingStatus('error');
+      setTestErrorMessage(e.message || 'Connection failed.');
     }
   };
 
@@ -137,8 +147,21 @@ export default function SupabaseSettingsModal({ onClose }) {
           )}
 
           {testingStatus === 'error' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--danger)', fontSize: '0.85rem' }}>
-              <AlertCircle size={16} /> Could not access bucket. Please ensure bucket name is correct and set to <strong>Public</strong> in Supabase.
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--danger)', fontSize: '0.85rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                <span>{testErrorMessage || 'Could not access bucket. Please verify your settings.'}</span>
+              </div>
+              {/paused|restore/i.test(testErrorMessage) && (
+                <a 
+                  href={`https://supabase.com/dashboard/project/${(supabaseUrl.replace(/^https?:\/\//, '').split('.')[0]) || 'xxrydoqgbzloogfitvsm'}`} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  style={{ color: 'var(--accent-secondary)', textDecoration: 'underline', marginTop: '4px' }}
+                >
+                  Open Supabase Dashboard to Restore Project →
+                </a>
+              )}
             </div>
           )}
 

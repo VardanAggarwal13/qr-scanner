@@ -38,22 +38,26 @@ export default function LiveScanner({ onScanSuccess }) {
   };
 
   // Enumerate available video inputs
-  useEffect(() => {
-    async function getDevices() {
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoInputs = devices.filter(d => d.kind === 'videoinput');
-        setCameras(videoInputs);
-        if (videoInputs.length > 0 && !selectedCameraId) {
-          // Prefer back camera if available
-          const backCam = videoInputs.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('environment'));
-          setSelectedCameraId(backCam ? backCam.deviceId : videoInputs[0].deviceId);
+  const refreshDevices = async () => {
+    try {
+      if (!navigator.mediaDevices?.enumerateDevices) return;
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoInputs = devices.filter(d => d.kind === 'videoinput');
+      setCameras(videoInputs);
+      if (videoInputs.length > 0 && !selectedCameraId) {
+        // Prefer back camera if available
+        const backCam = videoInputs.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('environment'));
+        if (backCam) {
+          setSelectedCameraId(backCam.deviceId);
         }
-      } catch (err) {
-        console.error('Error enumerating cameras:', err);
       }
+    } catch (err) {
+      console.error('Error enumerating cameras:', err);
     }
-    getDevices();
+  };
+
+  useEffect(() => {
+    refreshDevices();
   }, []);
 
   // Start video stream
@@ -70,7 +74,7 @@ export default function LiveScanner({ onScanSuccess }) {
         const constraints = {
           video: selectedCameraId
             ? { deviceId: { exact: selectedCameraId } }
-            : { facingMode: 'environment' }
+            : { facingMode: { ideal: 'environment' } }
         };
 
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -85,6 +89,9 @@ export default function LiveScanner({ onScanSuccess }) {
           videoRef.current.setAttribute('playsinline', 'true');
           await videoRef.current.play();
         }
+
+        // Re-enumerate devices with permission to get labels and allow camera switching
+        refreshDevices();
 
         // Check Torch & Zoom capabilities
         const track = stream.getVideoTracks()[0];

@@ -4,6 +4,7 @@ import {
   CreditCard, MapPin, Mail, Phone, MessageSquare, FileText, Eye, Download
 } from 'lucide-react';
 import { parseQRContent } from '../utils/contentParser';
+import { parseViewerLinkSync, unpackMediaFromURL } from '../utils/mediaCompressor';
 
 export default function ScanResultModal({ scanResult, onClose, onOpenDocument }) {
   const [copied, setCopied] = useState(false);
@@ -11,6 +12,29 @@ export default function ScanResultModal({ scanResult, onClose, onOpenDocument })
   if (!scanResult) return null;
 
   const parsed = parseQRContent(scanResult.rawValue);
+
+  const handleOpenAttachedMedia = async () => {
+    onClose();
+    let doc = parsed.mediaData || parseViewerLinkSync(scanResult.rawValue);
+    if (!doc) {
+      try {
+        doc = await unpackMediaFromURL(scanResult.rawValue);
+      } catch (e) {
+        console.error('Error unpacking attached media:', e);
+      }
+    }
+    if (doc && onOpenDocument) {
+      onOpenDocument(doc);
+    } else {
+      const raw = scanResult.rawValue;
+      const hashIdx = raw.indexOf('#');
+      if (hashIdx >= 0) {
+        window.location.hash = raw.slice(hashIdx);
+      } else {
+        window.open(raw, '_blank');
+      }
+    }
+  };
 
   const handleCopy = (text) => {
     navigator.clipboard.writeText(text || scanResult.rawValue);
@@ -146,10 +170,7 @@ export default function ScanResultModal({ scanResult, onClose, onOpenDocument })
           {parsed.type === 'attached_media' && (
             <button 
               className="btn-primary" 
-              onClick={() => {
-                onClose();
-                if (onOpenDocument) onOpenDocument(parsed.mediaData);
-              }}
+              onClick={handleOpenAttachedMedia}
               style={{ width: '100%' }}
             >
               <Eye size={18} /> View Attached Document / Media

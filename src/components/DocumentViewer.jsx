@@ -85,6 +85,16 @@ export default function DocumentViewer({ mediaData, onBack }) {
             if (!res.ok) throw new Error(`File server answered ${res.status}`);
             return res.arrayBuffer();
           });
+        } else if (pdfUrl.startsWith('data:')) {
+          try {
+            const b64 = pdfUrl.split(',')[1] || '';
+            const bin = atob(b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            bytesPromise = Promise.resolve(bytes.buffer);
+          } catch (e) {
+            console.error('Failed to decode data URL:', e);
+          }
         }
         const [pdfjsLib, buffer] = await Promise.all([loadPdfjs(), bytesPromise]);
         // PDF.js 6 only accepts an options object, never a bare string
@@ -152,16 +162,38 @@ export default function DocumentViewer({ mediaData, onBack }) {
     };
   }, [pdfDoc, currentPage, pdfScale]);
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     const fileSource = mediaData?.cloudUrl || mediaData?.url || mediaData?.dataUrl;
     if (!fileSource) return;
-    const link = document.createElement('a');
-    link.href = fileSource;
-    link.target = '_blank';
-    link.download = mediaData.fileName || `${mediaData.title || 'document'}${getFileExt(mediaData) ? '.' + getFileExt(mediaData) : ''}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+
+    const fileName = mediaData.fileName || `${mediaData.title || 'document'}${getFileExt(mediaData) ? '.' + getFileExt(mediaData) : ''}`;
+
+    const directTrigger = (href) => {
+      const link = document.createElement('a');
+      link.href = href;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    if (fileSource.startsWith('data:')) {
+      directTrigger(fileSource);
+      return;
+    }
+
+    try {
+      const res = await fetch(fileSource);
+      if (!res.ok) throw new Error('Fetch failed');
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      directTrigger(blobUrl);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
+    } catch {
+      directTrigger(fileSource);
+    }
   };
 
   const handleShare = async () => {
@@ -287,6 +319,17 @@ export default function DocumentViewer({ mediaData, onBack }) {
         gap: '12px'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {onBack && (
+            <button 
+              className="btn-secondary" 
+              onClick={onBack} 
+              title="Return to App" 
+              style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <ArrowLeft size={16} />
+              <span style={{ fontSize: '0.85rem' }}>Back</span>
+            </button>
+          )}
           <div style={{
             width: '42px',
             height: '42px',

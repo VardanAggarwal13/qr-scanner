@@ -100,6 +100,7 @@ export default function QRStudio({ onPreviewDocument }) {
   // Handle File Upload & Cloud Sync
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
+    if (e.target) e.target.value = '';
     if (!file) return;
 
     setIsProcessingFile(true);
@@ -190,7 +191,7 @@ export default function QRStudio({ onPreviewDocument }) {
   };
 
   const handleDownloadQR = () => {
-    const canvas = document.querySelector('canvas');
+    const canvas = document.querySelector('.qr-standee-card canvas') || document.querySelector('canvas');
     if (!canvas) return;
 
     saveCreatedDocument({
@@ -635,7 +636,7 @@ export default function QRStudio({ onPreviewDocument }) {
             </div>
 
             {/* Printable Frame / Standee Card */}
-            <div style={{
+            <div className="qr-standee-card" style={{
               background: '#ffffff',
               borderRadius: 'var(--radius-lg)',
               padding: hasFrame ? '24px 20px 20px 20px' : '20px',
@@ -695,11 +696,11 @@ export default function QRStudio({ onPreviewDocument }) {
 
             {/* Action Buttons */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <button className="btn-primary" onClick={handleDownloadQR} disabled={needsUpload} style={{ width: '100%', opacity: needsUpload ? 0.5 : 1 }}>
+              <button className="btn-primary" onClick={handleDownloadQR} disabled={isUploading} style={{ width: '100%' }}>
                 <Download size={18} /> Download High-Res QR (PNG)
               </button>
 
-              <button className="btn-secondary" onClick={handleCopyLink} disabled={needsUpload} style={{ width: '100%', opacity: needsUpload ? 0.5 : 1 }}>
+              <button className="btn-secondary" onClick={handleCopyLink} disabled={isUploading} style={{ width: '100%' }}>
                 {copiedLink ? <CheckCircle2 size={16} color="var(--success)" /> : <Copy size={16} />}
                 <span>{copiedLink ? 'Copied Link!' : 'Copy Direct Link'}</span>
               </button>

@@ -188,7 +188,7 @@ export function fileToDataURL(file) {
  * Compresses an image file before converting to Data URL if needed
  */
 export async function compressImageFile(file, maxWidth = 1200, quality = 0.8) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
