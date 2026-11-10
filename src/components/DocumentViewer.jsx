@@ -259,28 +259,6 @@ export default function DocumentViewer({ mediaData, onBack }) {
   return (
     <div style={{ maxWidth: '1100px', width: '100%', margin: '0 auto', padding: '6px 6px 30px 6px' }}>
       
-      {onBack && (
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-          <button 
-            className="btn-ghost" 
-            onClick={onBack} 
-            title="Return to App" 
-            style={{ 
-              padding: '6px 14px', 
-              fontSize: '0.85rem', 
-              display: 'inline-flex', 
-              alignItems: 'center', 
-              gap: '6px',
-              background: 'rgba(255, 255, 255, 0.08)',
-              borderRadius: 'var(--radius-sm)'
-            }}
-          >
-            <ArrowLeft size={16} />
-            <span>Back</span>
-          </button>
-        </div>
-      )}
-
       {/* Main Content Presentation */}
       <div className="glass-panel" style={{ padding: '8px', minHeight: 'auto', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         
