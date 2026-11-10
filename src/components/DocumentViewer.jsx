@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  FileText, Image as ImageIcon, Video, Music, Link as LinkIcon, 
-  Download, Share2, Printer, ArrowLeft, ZoomIn, ZoomOut, RotateCw, 
-  ChevronLeft, ChevronRight, Eye, Shield, Lock, CheckCircle2, Copy, ExternalLink, QrCode
+  FileText, ArrowLeft, ZoomIn, ZoomOut, RotateCw, 
+  ChevronLeft, ChevronRight, Shield, Lock, ExternalLink
 } from 'lucide-react';
 import { loadPdfjs, takePrefetchedFile } from '../utils/pdfjsLoader';
 
@@ -162,60 +161,6 @@ export default function DocumentViewer({ mediaData, onBack }) {
     };
   }, [pdfDoc, currentPage, pdfScale]);
 
-  const handleDownload = async () => {
-    const fileSource = mediaData?.cloudUrl || mediaData?.url || mediaData?.dataUrl;
-    if (!fileSource) return;
-
-    const fileName = mediaData.fileName || `${mediaData.title || 'document'}${getFileExt(mediaData) ? '.' + getFileExt(mediaData) : ''}`;
-
-    const directTrigger = (href) => {
-      const link = document.createElement('a');
-      link.href = href;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    };
-
-    if (fileSource.startsWith('data:')) {
-      directTrigger(fileSource);
-      return;
-    }
-
-    try {
-      const res = await fetch(fileSource);
-      if (!res.ok) throw new Error('Fetch failed');
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      directTrigger(blobUrl);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
-    } catch {
-      directTrigger(fileSource);
-    }
-  };
-
-  const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: mediaData.title,
-          text: mediaData.description || `Attached Document: ${mediaData.title}`,
-          url: window.location.href
-        });
-      } catch (e) {}
-    } else {
-      navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    }
-  };
-
-  const handlePrint = () => {
-    window.print();
-  };
-
   if (!mediaData) {
     return (
       <div style={{ textAlign: 'center', padding: '60px 20px' }}>
@@ -291,104 +236,33 @@ export default function DocumentViewer({ mediaData, onBack }) {
     );
   }
 
-  const getTypeIcon = () => {
-    switch (mediaData.type) {
-      case 'pdf': return <FileText size={22} color="#ef4444" />;
-      case 'image': return <ImageIcon size={22} color="#10b981" />;
-      case 'video': return <Video size={22} color="#3b82f6" />;
-      case 'audio': return <Music size={22} color="#a855f7" />;
-      default: return <LinkIcon size={22} color="#06b6d4" />;
-    }
-  };
-
   return (
-    <div style={{ maxWidth: '1100px', width: '100%', margin: '0 auto', padding: '16px 16px 60px 16px' }}>
+    <div style={{ maxWidth: '1100px', width: '100%', margin: '0 auto', padding: '10px 10px 40px 10px' }}>
       
-      {/* Sleek Minimal Header Bar for Receiver */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '14px 20px',
-        background: 'var(--bg-glass)',
-        backdropFilter: 'blur(16px)',
-        borderRadius: 'var(--radius-lg)',
-        border: '1px solid var(--border-glass)',
-        marginBottom: '18px',
-        flexWrap: 'wrap',
-        gap: '12px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {onBack && (
-            <button 
-              className="btn-secondary" 
-              onClick={onBack} 
-              title="Return to App" 
-              style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <ArrowLeft size={16} />
-              <span style={{ fontSize: '0.85rem' }}>Back</span>
-            </button>
-          )}
-          <div style={{
-            width: '42px',
-            height: '42px',
-            borderRadius: '10px',
-            background: 'rgba(255, 255, 255, 0.06)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            {getTypeIcon()}
-          </div>
-          <div>
-            <h1 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-              {mediaData.title || 'Attached Document'}
-            </h1>
-            {mediaData.author && (
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                By {mediaData.author}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* 1-Click Action Buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button className="btn-secondary" onClick={handleShare} style={{ padding: '8px 12px' }} title="Share Link">
-            {copied ? <CheckCircle2 size={16} color="var(--success)" /> : <Share2 size={16} />}
-            <span style={{ fontSize: '0.85rem' }}>{copied ? 'Copied' : 'Share'}</span>
+      {onBack && (
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
+          <button 
+            className="btn-ghost" 
+            onClick={onBack} 
+            title="Return to App" 
+            style={{ 
+              padding: '6px 14px', 
+              fontSize: '0.85rem', 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: '6px',
+              background: 'rgba(255, 255, 255, 0.08)',
+              borderRadius: 'var(--radius-sm)'
+            }}
+          >
+            <ArrowLeft size={16} />
+            <span>Back</span>
           </button>
-          
-          <button className="btn-secondary" onClick={handlePrint} style={{ padding: '8px 12px' }} title="Print">
-            <Printer size={16} />
-            <span style={{ fontSize: '0.85rem' }}>Print</span>
-          </button>
-
-          <button className="btn-primary" onClick={handleDownload} style={{ padding: '8px 16px' }} title="Download Original">
-            <Download size={16} />
-            <span style={{ fontSize: '0.85rem' }}>Download</span>
-          </button>
-        </div>
-      </div>
-
-      {mediaData.description && (
-        <div style={{
-          padding: '12px 18px',
-          background: 'var(--bg-card)',
-          borderRadius: 'var(--radius-md)',
-          border: '1px solid var(--border-glass)',
-          marginBottom: '16px',
-          color: 'var(--text-secondary)',
-          fontSize: '0.9rem',
-          lineHeight: 1.5
-        }}>
-          {mediaData.description}
         </div>
       )}
 
       {/* Main Content Presentation */}
-      <div className="glass-panel" style={{ padding: '16px', minHeight: '500px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="glass-panel" style={{ padding: '12px', minHeight: '500px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         
         {/* --- 1. PDF VIEWER --- */}
         {mediaData.type === 'pdf' && (
@@ -513,27 +387,31 @@ export default function DocumentViewer({ mediaData, onBack }) {
             <div style={{
               overflow: 'auto',
               maxWidth: '100%',
-              maxHeight: '75vh',
+              maxHeight: '85vh',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '16px',
+              padding: '8px',
               borderRadius: 'var(--radius-md)',
               background: 'rgba(0, 0, 0, 0.3)'
             }}>
               <img 
                 src={mediaData.cloudUrl || mediaData.url || mediaData.dataUrl} 
-                alt={mediaData.title}
+                alt={mediaData.title || 'Document'}
                 fetchPriority="high"
                 decoding="async"
+                draggable={false}
+                onContextMenu={(e) => e.preventDefault()}
                 style={{
                   transform: `scale(${imgZoom}) rotate(${imgRotation}deg)`,
                   transition: 'transform 0.2s ease',
                   maxWidth: '100%',
-                  maxHeight: '70vh',
+                  maxHeight: '85vh',
                   objectFit: 'contain',
                   borderRadius: 'var(--radius-sm)',
-                  boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
+                  boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none'
                 }}
               />
             </div>
@@ -545,12 +423,14 @@ export default function DocumentViewer({ mediaData, onBack }) {
           <div style={{ width: '100%', maxWidth: '850px' }}>
             <video 
               controls
+              controlsList="nodownload"
+              onContextMenu={(e) => e.preventDefault()}
               preload="metadata"
               playsInline
               src={mediaData.cloudUrl || mediaData.url || mediaData.dataUrl}
               style={{
                 width: '100%',
-                maxHeight: '75vh',
+                maxHeight: '80vh',
                 borderRadius: 'var(--radius-md)',
                 boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
                 background: '#000'
@@ -573,12 +453,13 @@ export default function DocumentViewer({ mediaData, onBack }) {
               margin: '0 auto 20px auto',
               boxShadow: '0 0 30px rgba(168, 85, 247, 0.4)'
             }}>
-              <Music size={36} color="#fff" />
+              <FileText size={36} color="#fff" />
             </div>
             <h3 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>{mediaData.title}</h3>
             <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', fontSize: '0.85rem' }}>Audio Voice Recording</p>
             <audio
               controls
+              controlsList="nodownload"
               preload="metadata"
               src={mediaData.cloudUrl || mediaData.url || mediaData.dataUrl} 
               style={{ width: '100%', outline: 'none' }}
@@ -662,15 +543,12 @@ export default function DocumentViewer({ mediaData, onBack }) {
                   {mediaData.fileName || mediaData.title}
                 </p>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                  This file type cannot be previewed in the browser. Download it to open it on your device.
+                  This file format cannot be rendered directly in the browser preview.
                 </p>
               </div>
             )}
 
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-              <button className="btn-primary" onClick={handleDownload}>
-                <Download size={16} /> Download file
-              </button>
               <a className="btn-secondary" href={pdfUrl} target="_blank" rel="noopener noreferrer">
                 <ExternalLink size={16} /> Open in new tab
               </a>
