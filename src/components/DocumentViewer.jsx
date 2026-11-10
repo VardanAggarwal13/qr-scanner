@@ -18,7 +18,6 @@ export default function DocumentViewer({ mediaData, onBack }) {
   const [activePin, setActivePin] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(!mediaData?.pin);
   const [pinError, setPinError] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   // PDF Viewer State
   const [pdfDoc, setPdfDoc] = useState(null);
@@ -36,6 +35,27 @@ export default function DocumentViewer({ mediaData, onBack }) {
   // Image Viewer State
   const [imgZoom, setImgZoom] = useState(1);
   const [imgRotation, setImgRotation] = useState(0);
+
+  // Window resize & orientation change listener for dynamic document fitting
+  const [windowWidth, setWindowWidth] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 1000));
+  useEffect(() => {
+    let timeoutId;
+    const handleResize = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          setWindowWidth(window.innerWidth);
+        }
+      }, 150);
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+      clearTimeout(timeoutId);
+    };
+  }, []);
 
   // Unlock check
   const handleUnlock = (e) => {
@@ -159,7 +179,7 @@ export default function DocumentViewer({ mediaData, onBack }) {
     return () => {
       if (renderTask) renderTask.cancel();
     };
-  }, [pdfDoc, currentPage, pdfScale]);
+  }, [pdfDoc, currentPage, pdfScale, windowWidth]);
 
   if (!mediaData) {
     return (
@@ -237,10 +257,10 @@ export default function DocumentViewer({ mediaData, onBack }) {
   }
 
   return (
-    <div style={{ maxWidth: '1100px', width: '100%', margin: '0 auto', padding: '10px 10px 40px 10px' }}>
+    <div style={{ maxWidth: '1100px', width: '100%', margin: '0 auto', padding: '6px 6px 30px 6px' }}>
       
       {onBack && (
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
           <button 
             className="btn-ghost" 
             onClick={onBack} 
@@ -262,7 +282,7 @@ export default function DocumentViewer({ mediaData, onBack }) {
       )}
 
       {/* Main Content Presentation */}
-      <div className="glass-panel" style={{ padding: '12px', minHeight: '500px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="glass-panel" style={{ padding: '8px', minHeight: 'auto', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         
         {/* --- 1. PDF VIEWER --- */}
         {mediaData.type === 'pdf' && (
@@ -275,13 +295,17 @@ export default function DocumentViewer({ mediaData, onBack }) {
               justifyContent: 'space-between',
               width: '100%',
               maxWidth: '900px',
-              padding: '8px 16px',
+              padding: '6px 12px',
               background: 'var(--bg-secondary)',
               borderRadius: 'var(--radius-md)',
               border: '1px solid var(--border-glass)',
-              marginBottom: '14px',
+              marginBottom: '10px',
+              position: 'sticky',
+              top: '4px',
+              zIndex: 10,
+              backdropFilter: 'blur(12px)',
               flexWrap: 'wrap',
-              gap: '10px'
+              gap: '6px'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <button 
@@ -325,9 +349,10 @@ export default function DocumentViewer({ mediaData, onBack }) {
               overflow: 'auto',
               display: 'flex',
               justifyContent: 'center',
-              padding: '10px 0',
+              padding: '4px 0',
               background: 'rgba(0, 0, 0, 0.25)',
-              borderRadius: 'var(--radius-md)'
+              borderRadius: 'var(--radius-md)',
+              WebkitOverflowScrolling: 'touch'
             }}>
               {pdfError ? (
                 <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-secondary)' }}>
@@ -346,10 +371,13 @@ export default function DocumentViewer({ mediaData, onBack }) {
               ) : (
                 <canvas 
                   ref={pdfCanvasRef} 
+                  onContextMenu={(e) => e.preventDefault()}
                   style={{ 
                     borderRadius: '4px', 
                     boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-                    background: '#ffffff'
+                    background: '#ffffff',
+                    maxWidth: '100%',
+                    height: 'auto'
                   }} 
                 />
               )}
@@ -363,10 +391,15 @@ export default function DocumentViewer({ mediaData, onBack }) {
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '10px',
-              marginBottom: '14px',
-              padding: '6px 14px',
+              justifyContent: 'center',
+              gap: '8px',
+              position: 'sticky',
+              top: '4px',
+              zIndex: 10,
+              marginBottom: '10px',
+              padding: '6px 12px',
               background: 'var(--bg-secondary)',
+              backdropFilter: 'blur(12px)',
               borderRadius: 'var(--radius-md)',
               border: '1px solid var(--border-glass)'
             }}>
@@ -386,14 +419,16 @@ export default function DocumentViewer({ mediaData, onBack }) {
 
             <div style={{
               overflow: 'auto',
+              width: '100%',
               maxWidth: '100%',
               maxHeight: '85vh',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '8px',
+              padding: '4px',
               borderRadius: 'var(--radius-md)',
-              background: 'rgba(0, 0, 0, 0.3)'
+              background: 'rgba(0, 0, 0, 0.25)',
+              WebkitOverflowScrolling: 'touch'
             }}>
               <img 
                 src={mediaData.cloudUrl || mediaData.url || mediaData.dataUrl} 
@@ -404,9 +439,10 @@ export default function DocumentViewer({ mediaData, onBack }) {
                 onContextMenu={(e) => e.preventDefault()}
                 style={{
                   transform: `scale(${imgZoom}) rotate(${imgRotation}deg)`,
+                  transformOrigin: 'center center',
                   transition: 'transform 0.2s ease',
-                  maxWidth: '100%',
-                  maxHeight: '85vh',
+                  maxWidth: imgZoom > 1 ? 'none' : '100%',
+                  maxHeight: imgZoom > 1 ? 'none' : '85vh',
                   objectFit: 'contain',
                   borderRadius: 'var(--radius-sm)',
                   boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
@@ -498,7 +534,7 @@ export default function DocumentViewer({ mediaData, onBack }) {
                   rel="noopener noreferrer"
                   className="btn-primary"
                 >
-                  <LinkIcon size={16} /> Open Destination
+                  <ExternalLink size={16} /> Open Destination
                 </a>
               </div>
             )}
@@ -511,8 +547,8 @@ export default function DocumentViewer({ mediaData, onBack }) {
             {OFFICE_EXTS.includes(fileExt) && isHttp && (
               <iframe
                 src={'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(pdfUrl)}
-                title={mediaData.title}
-                style={{ width: '100%', height: '70vh', border: 'none', borderRadius: '8px', background: '#fff' }}
+                title={mediaData.title || 'Office Document'}
+                style={{ width: '100%', height: '82vh', minHeight: '480px', border: 'none', borderRadius: '8px', background: '#fff' }}
               />
             )}
 
